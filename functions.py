@@ -89,6 +89,16 @@ def train_test_split(df):
     lista = [train, test]
     return lista
 
+def plotseasonal(res, axes):
+    res.observed.plot(ax=axes[0], legend=False)
+    axes[0].set_ylabel('Observed')
+    res.trend.plot(ax=axes[1], legend=False)
+    axes[1].set_ylabel('Trend')
+    res.seasonal.plot(ax=axes[2], legend=False)
+    axes[2].set_ylabel('Seasonal')
+    res.resid.plot(ax=axes[3], legend=False)
+    axes[3].set_ylabel('Residual')
+
 def roll_mean_std_plot(df, nation_list, roll_num):
     fig, ax = plt.subplots(len(nation_list), 1, figsize = (15, 15))
     plt.suptitle('GDP of the nations', fontsize = 40)
@@ -127,7 +137,7 @@ def check_stationarity(df_list, df_train_test, nation_list):
     final_df = pd.DataFrame(list_for_df, 
                             columns = ['ADF', 'P-value for ADF', 'ADF stationarity', 'KPSS', 'P-value for KPSS', 'KPSS stationarity'], 
                             index = [nation_list])
-    display(final_df)
+    return final_df
 
 def log_transform(df_train_test):
     for nation in df_train_test:
