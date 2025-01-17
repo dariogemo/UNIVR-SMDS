@@ -50,7 +50,7 @@ def nation_input(number, valid_nations, df):
         if not first and number == 4:
             first = 'Philippines'
         if not first and number == 5:
-            first = 'Cuba'
+            first = 'Greece'
         if first in valid_nations:
             break
         if first in df['Country'].unique() and first not in valid_nations:
