@@ -4,6 +4,7 @@ from statsmodels.tsa.stattools import adfuller, kpss
 from scipy.signal import periodogram, find_peaks
 import matplotlib.pyplot as plt
 from seaborn import lineplot
+from statsmodels.tsa.seasonal import STL
 
 def preprocess_df(df):
     all_nation_list = df.index.unique()
@@ -39,9 +40,9 @@ def nation_input(number, valid_nations, df):
         if not first and number == 3:
             first = 'Belgium'
         if not first and number == 4:
-            first = 'Canada'
+            first = 'Philippines'
         if not first and number == 5:
-            first = 'South Africa'
+            first = 'Cuba'
         if first in valid_nations:
             break
         if first in df['Country'].unique() and first not in valid_nations:
@@ -115,38 +116,70 @@ def roll_mean_std_plot(df, nation_list, roll_num):
 
     plt.show()
 
-def check_stationarity(df_list, df_train_test, nation_list):
+def check_stationarity(df_list, df_train_test, nation_list, dic = True):
     list_for_df = []
-    for idx, df in enumerate(df_list):
-        adf_test = adfuller(df_train_test[nation_list[idx]][0]['GDP'], autolag='AIC')
-        lista_prova = []
-        lista_prova.append(adf_test[0])
-        lista_prova.append(adf_test[1])
-        if adf_test[1] <= 0.05:
-            lista_prova.append('Yes')
-        else:
-            lista_prova.append('No')
-        kpss_out = kpss(df_train_test[nation_list[idx]][0]['GDP'], regression='c', nlags='auto', store=True)
-        lista_prova.append(kpss_out[0])
-        lista_prova.append(kpss_out[1])
-        if kpss_out[1] >= 0.05:
-            lista_prova.append('Yes')
-        else:
-            lista_prova.append('No')
-        list_for_df.append(lista_prova)
-    final_df = pd.DataFrame(list_for_df, 
-                            columns = ['ADF', 'P-value for ADF', 'ADF stationarity', 'KPSS', 'P-value for KPSS', 'KPSS stationarity'], 
-                            index = [nation_list])
+    if dic == True:
+        for idx, df in enumerate(df_list):
+            adf_test = adfuller(df_train_test[nation_list[idx]][0]['GDP'], autolag='AIC')
+            lista_prova = []
+            lista_prova.append(adf_test[0])
+            lista_prova.append(adf_test[1])
+            if adf_test[1] <= 0.05:
+                lista_prova.append('Yes')
+            else:
+                lista_prova.append('No')
+            kpss_out = kpss(df_train_test[nation_list[idx]][0]['GDP'], regression='c', nlags='auto', store=True)
+            lista_prova.append(kpss_out[0])
+            lista_prova.append(kpss_out[1])
+            if kpss_out[1] >= 0.05:
+                lista_prova.append('Yes')
+            else:
+                lista_prova.append('No')
+            list_for_df.append(lista_prova)
+        final_df = pd.DataFrame(list_for_df, 
+                                columns = ['ADF', 'P-value for ADF', 'ADF stationarity', 'KPSS', 'P-value for KPSS', 'KPSS stationarity'], 
+                                index = [nation_list])
+    if dic == False:
+        for idx, df in enumerate(df_list):
+            adf_test = adfuller(df_train_test[nation_list[idx]], autolag='AIC')
+            lista_prova = []
+            lista_prova.append(adf_test[0])
+            lista_prova.append(adf_test[1])
+            if adf_test[1] <= 0.05:
+                lista_prova.append('Yes')
+            else:
+                lista_prova.append('No')
+            kpss_out = kpss(df_train_test[nation_list[idx]], regression='c', nlags='auto', store=True)
+            lista_prova.append(kpss_out[0])
+            lista_prova.append(kpss_out[1])
+            if kpss_out[1] >= 0.05:
+                lista_prova.append('Yes')
+            else:
+                lista_prova.append('No')
+            list_for_df.append(lista_prova)
+        final_df = pd.DataFrame(list_for_df, 
+                                columns = ['ADF', 'P-value for ADF', 'ADF stationarity', 'KPSS', 'P-value for KPSS', 'KPSS stationarity'], 
+                                index = [nation_list])
     return final_df
 
 def log_transform(df_train_test):
+    df_train_test_x = {}
     for nation in df_train_test:
-        df_train_test[nation] = (np.log(df_train_test[nation][0]), np.log(df_train_test[nation][1]))
-    return df_train_test
+        df_train_test_x[nation] = (np.log(df_train_test[nation][0]), np.log(df_train_test[nation][1]))
+    return df_train_test_x
 
 def difference(df_train_test, difference, nation):
     tuple = (df_train_test[nation][0].diff(difference).dropna(), df_train_test[nation][1].diff().dropna())
     return tuple
+
+def detrend(df_train_test_log_dif, nation_list, seasons_list):
+    df_train_test_log_dif_detrend = {}
+    for idx, nation in enumerate(nation_list):
+        stl = STL(df_train_test_log_dif[nation][0]['GDP'], period = seasons_list[idx])
+        result = stl.fit()
+        trend = result.trend
+        df_train_test_log_dif_detrend[nation] = df_train_test_log_dif[nation][0]['GDP'] - trend
+    return df_train_test_log_dif_detrend
 
 def spd(nation, df_train_test, Fs):
     f_per, Pxx_per = periodogram(df_train_test[nation][0]['GDP'], Fs, detrend = None,window = 'triang',return_onesided = True, scaling = 'density')
