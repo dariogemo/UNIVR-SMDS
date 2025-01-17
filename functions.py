@@ -5,6 +5,14 @@ from scipy.signal import periodogram, find_peaks
 import matplotlib.pyplot as plt
 from seaborn import lineplot
 from statsmodels.tsa.seasonal import STL
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.stats.stattools import durbin_watson
+from scipy.stats import jarque_bera
+from sklearn.preprocessing import StandardScaler
+from pmdarima import auto_arima
+from statsmodels.tsa.arima.model import ARIMA
+from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+
 
 def preprocess_df(df):
     all_nation_list = df.index.unique()
@@ -213,3 +221,108 @@ def spd(nation, df_train_test, Fs):
     display(period_df.head(5))
 
     return top_season
+
+# PREDICTIONS
+
+def create_metrics_df():
+    df_metrics_1 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
+    df_metrics_2 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
+    df_metrics_3 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
+    df_metrics_4 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
+    df_metrics_5 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
+    metrics_list_of_df = [df_metrics_1, df_metrics_2, df_metrics_3, df_metrics_4, df_metrics_5]
+    return metrics_list_of_df
+
+def arima_order(nation_list, df_train_test):
+    order_list = []
+    arima_model_list = []
+    for idx, nation in enumerate(nation_list):
+        scaler = StandardScaler()
+        print(nation)
+        X_train_scaled = scaler.fit_transform(df_train_test[nation][0].drop('GDP', axis=1))
+        X_test_scaled = scaler.transform(df_train_test[nation][1].drop('GDP', axis=1))
+        GDP_train_scaled = scaler.fit_transform(pd.DataFrame(df_train_test[nation][0]['GDP']))
+        GDP_test_scaled = scaler.fit_transform(pd.DataFrame(df_train_test[nation][1]['GDP']))
+
+        best_model = auto_arima(
+        GDP_train_scaled, 
+        X = X_train_scaled,
+        start_p = 0, d = 2, start_q = 0, 
+        max_p = 5, max_q = 5,
+        seasonal = False,
+        error_action = 'warn', 
+        with_intercept = True, 
+        trace = True, 
+        suppress_warnings = True,
+        stepwise = True,
+        random_state = 20, 
+        information_criterion = 'aic'
+        )
+
+        order_list.append(best_model.order)
+
+        arimax_model = ARIMA(GDP_train_scaled, 
+                     exog = X_train_scaled,
+                     order = best_model.order
+                     ).fit()
+        
+        arima_model_list.append(arimax_model)
+    return order_list, arima_model_list
+
+def arima_diagnostics(arima_model_list, nation_list):
+    for idx, model in enumerate(arima_model_list):
+        print(f"Summary and diagnostics for {nation_list[idx]}'s arima model\n")
+        print(model.summary())
+        model.plot_diagnostics(figsize = (10, 7))
+        plt.show()
+        print('--------------------------------------')
+
+def arima_res_stats(arima_model_list, nation_list, df_train_test):
+    for idx, model in enumerate(arima_model_list):
+        stand_resid = np.reshape(model.standardized_forecasts_error, len(df_train_test[nation_list[idx]][0]['GDP']))
+        print(f"DW statistic for standardized residuals of {nation_list[idx]}'s arima model: {durbin_watson(stand_resid)}")
+        display(acorr_ljungbox(stand_resid, lags = 10))
+        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s arima mode: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+        print('-------------------------------------------------------------------------------')
+
+def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_test):
+    arima_prediction_list = []
+    fig, ax = plt.subplots(5, 1, figsize = (15, 15))
+    plt.suptitle('Arimax predictions', fontsize = 40)
+    plt.tight_layout(pad = 2.5)
+
+    for idx, model in enumerate(arima_model_list):
+        scaler = StandardScaler()
+        X_test_scaled = scaler.fit_transform(df_train_test[nation_list[idx]][0].drop('GDP', axis=1))
+        GDP_test_scaled = scaler.fit_transform(pd.DataFrame(df_train_test[nation_list[idx]][1]['GDP']))
+        prediction = model.get_prediction(start = 0, end = 10,
+                                          exog = X_test_scaled,
+                                          dynamic = False
+                                          )
+        df_pred = prediction.summary_frame()
+        # Reverse scaling for predictions
+        df_pred['mean'] = scaler.inverse_transform(df_pred[['mean']])
+        arima_prediction_list.append(df_pred['mean'])
+        #ax[idx].figure(figsize = (15, 5))
+        ax[idx].set_title(f'ARIMA{order_list[idx]} model for {nation_list[idx]} GDP')
+
+        ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
+        #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'].index, df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+
+        ax[idx].set_xlabel('Time')
+        ax[idx].set_ylabel('Values')
+        ax[idx].legend(loc = 'upper left')
+
+    plt.show()
+    return arima_prediction_list
+
+def add_metrics(model_name:str, model_list, metrics_list, df_train_test, nation_list, prediction_list):
+    for idx, model in enumerate(model_list):
+        metrics = pd.Series({'Model_name': model_name, 'AIC':model.aic, 
+                            'RMSE': root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]),
+                            'MAE': mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]), 
+                            'MAPE':mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])})
+        metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
+    return metrics_list
