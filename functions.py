@@ -51,7 +51,7 @@ def nation_input(number, valid_nations, df):
         if not first and number == 4:
             first = 'Philippines'
         if not first and number == 5:
-            first = 'Greece'
+            first = 'Germany'
         if first in valid_nations:
             break
         if first in df['Country'].unique() and first not in valid_nations:
@@ -288,7 +288,7 @@ def arima_res_stats(arima_model_list, nation_list, df_train_test):
 
 def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_test):
     arima_prediction_list = []
-    fig, ax = plt.subplots(5, 1, figsize = (15, 15))
+    fig, ax = plt.subplots(5, 1, figsize = (15, 18))
     plt.suptitle('Arimax predictions', fontsize = 40)
     plt.tight_layout(pad = 2.5)
 
