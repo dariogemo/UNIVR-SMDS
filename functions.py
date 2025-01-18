@@ -11,6 +11,7 @@ from scipy.stats import jarque_bera
 from sklearn.preprocessing import StandardScaler
 from pmdarima import auto_arima
 from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.exponential_smoothing.ets import ETSModel
 from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 
 
@@ -223,7 +224,7 @@ def spd(nation, df_train_test, Fs):
 
     return top_season
 
-# PREDICTIONS
+# MODELS
 
 def create_metrics_df():
     df_metrics_1 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
@@ -278,12 +279,12 @@ def arima_diagnostics(arima_model_list, nation_list):
         plt.show()
         print('--------------------------------------')
 
-def arima_res_stats(arima_model_list, nation_list, df_train_test):
+def res_stats(arima_model_list, nation_list, df_train_test):
     for idx, model in enumerate(arima_model_list):
         stand_resid = np.reshape(model.standardized_forecasts_error, len(df_train_test[nation_list[idx]][0]['GDP']))
-        print(f"DW statistic for standardized residuals of {nation_list[idx]}'s arima model: {durbin_watson(stand_resid)}")
+        print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
         display(acorr_ljungbox(stand_resid, lags = 10))
-        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s arima mode: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
         print('-------------------------------------------------------------------------------')
 
 def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_test):
@@ -327,3 +328,43 @@ def add_metrics(model_name:str, model_list, metrics_list, df_train_test, nation_
                             'MAPE':mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])})
         metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
     return metrics_list
+
+def ets_order(df_train_test, nation_list):
+    df_params = []
+    model_list = []
+    for nation in nation_list:
+        best_map = 100
+        best_i = 0
+        for i in range(2, 14):
+            for err in ['add', 'mul']:
+                for trend in ['add', 'mul']:
+                    for season in ['add', 'mul']:
+                        for dam_trend in [True, False]:
+                            model_1 = ETSModel(df_train_test[nation][0]['GDP'],
+                                            error = err,
+                                            trend = trend, 
+                                            seasonal = season, 
+                                            seasonal_periods = i, 
+                                            damped_trend = dam_trend).fit()
+                            pred_1 = model_1.get_prediction(start = '2010', end = '2020')
+                            df_1 = pred_1.summary_frame()
+                            map = mean_absolute_percentage_error(df_train_test[nation][1]['GDP'], df_1['mean'])
+                        if(map < best_map):
+                            best_map = map
+                            best_err = err
+                            best_trend = trend
+                            best_season = season
+                            best_i = i
+                            best_dam_trend = dam_trend
+                            best_model = ETSModel(df_train_test[nation][0]['GDP'], 
+                                                  error = best_err,
+                                                  trend = best_trend, 
+                                                  seasonal = best_season, 
+                                                  seasonal_periods = best_i,
+                                                  damped_trend = best_dam_trend).fit()
+        model_list.append(best_model)
+        x = [best_err, best_trend, best_season, best_i, best_dam_trend]
+        df_params.append(x)
+    df_params = pd.DataFrame(df_params, index = nation_list)
+
+    return model_list, df_params
