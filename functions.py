@@ -30,6 +30,7 @@ def preprocess_df(df):
     mask = count_df.sum(axis = 1) == 884
     valid_nations = list(count_df[mask].index)
     df = df[df['Country'].isin(valid_nations)]
+    #df.columns = [['Country', 'IndicatoName', pd.date_range(start = 1970, periods = 51, freq = 'YE').year]]
 
     return df, valid_nations
 
@@ -71,7 +72,7 @@ def create_df(df):
     df = df.T.reset_index().drop(['index'], axis = 1)
     df.columns = df.loc[0]
     df = df.drop(0)
-    df.index = pd.date_range(start = 1970, periods = 51, freq = 'YE').year
+    df.index = pd.date_range(start="1970-01-01", end="2020-12-31", freq="YS")
     df = df[['Exports of goods and services', 'Imports of goods and services', 'Gross Domestic Product (GDP)', 'Manufacturing (ISIC D)', 'Gross capital formation']]
     df = df.iloc[:, [0, 1, 3, 4, 2]]
     df.columns = ['Exports', 'Imports', 'Manufacturing', 'Gross_capital', 'GDP']
@@ -91,9 +92,9 @@ def lowest_corr_variable(corr_df):
     return idx
 
 def train_test_split(df):
-    train = df.loc[:2009]
+    train = df.loc[:'2009-01-01']
     train = train.astype('float')
-    test = df.loc[2010:]
+    test = df.loc['2010-01-01':]
     test = test.astype('float')
     lista = [train, test]
     return lista
