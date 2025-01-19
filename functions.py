@@ -13,7 +13,9 @@ from pmdarima import auto_arima
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.exponential_smoothing.ets import ETSModel
 from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
-
+from statsmodels.tsa.stattools import grangercausalitytests
+from statsmodels.tsa.api import VAR
+from statsmodels.tsa.statespace.varmax import VARMAX
 
 def preprocess_df(df):
     all_nation_list = df.index.unique()
@@ -258,7 +260,8 @@ def arima_order(nation_list, df_train_test):
         suppress_warnings = True,
         stepwise = True,
         random_state = 20, 
-        information_criterion = 'aic'
+        information_criterion = 'aic',
+        disp = False
         )
 
         order_list.append(best_model.order)
@@ -393,3 +396,86 @@ def ets_prediction_plot(ets_model_list, nation_list, df_train_test):
 
     plt.show()
     return ets_prediction_list
+
+def grangers_causation(data, name_variables, test, maxlags):
+    df = pd.DataFrame(np.zeros((len(name_variables), len(name_variables))), columns = name_variables, index = name_variables)
+    for c in df.columns:
+        for r in df.columns:
+            test_result = grangercausalitytests(data[[r, c]], [maxlags], verbose = False)
+            p_values = round(test_result[maxlags][0][test][1], 4)
+            df.loc[c,r] = p_values
+    return df
+
+def grangers_causation_columns(df_train_test_log_dif, nation_list):
+    grangers_columns = []
+    for nation in nation_list:
+        print(nation)
+        model = VAR(df_train_test_log_dif[nation][0])
+        lag_selection = model.select_order(maxlags = 5, trend = 'ctt')
+        optimal_lag = lag_selection.aic
+
+        df = grangers_causation(df_train_test_log_dif[nation][0], df_train_test_log_dif[nation][0].columns,'ssr_chi2test', optimal_lag)
+        indexes = df[df['GDP'] > 0.05].index.tolist()
+        grangers_columns.append(indexes)
+        print(f'Best columns: {indexes}')
+
+    return grangers_columns
+
+from statsmodels.tsa.api import VARMAX
+
+def varmax_order(df_train_test_log_dif, nation_list, grangers_causation_columns):
+    """
+    Finds the best VARMAX order (p, q) for each nation using AIC.
+    
+    Parameters:
+        df_train_test_log_dif (dict): Dictionary of time series data for each nation.
+        nation_list (list): List of nation names.
+        grangers_causation_columns (list): List of lists containing the selected columns for each nation.
+    
+    Returns:
+        tuple: A list of (p, q) orders and a list of fitted VARMAX models for each nation.
+    """
+    varmax_model_list = []
+    results = []
+    
+    for idx, nation in enumerate(nation_list):
+        print(f"Processing nation: {nation}")
+        best_aic = float("inf")
+        best_p, best_q = None, None
+        best_model = None
+        
+        # Ensure there are columns to model
+        if not grangers_causation_columns[idx]:
+            print(f"No causal columns for {nation}, skipping.")
+            results.append(None)
+            varmax_model_list.append(None)
+            continue
+        
+        # Iterate over p and q
+        for p in range(1, 4):
+            for q in range(1, 4):
+                try:
+                    model = VARMAX(
+                        df_train_test_log_dif[nation][0][grangers_causation_columns[idx]],
+                        order=(p, q)
+                    ).fit(disp=False)
+                    aic = model.aic
+                    if aic < best_aic:
+                        best_aic = aic
+                        best_p, best_q = p, q
+                        best_model = model
+                except Exception as e:
+                    print(f"Error fitting VARMAX for {nation}, (p, q)=({p}, {q}): {e}")
+                    continue
+        
+        # Append best model and order
+        if best_model is not None:
+            varmax_model_list.append(best_model)
+            results.append([best_p, best_q])
+            print(f"Best order for {nation}: (p, q)=({best_p}, {best_q}), AIC={best_aic}")
+        else:
+            print(f"No valid model found for {nation}.")
+            varmax_model_list.append(None)
+            results.append(None)
+    
+    return results, varmax_model_list
