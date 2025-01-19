@@ -345,7 +345,7 @@ def ets_order(df_train_test, nation_list):
                                             trend = trend, 
                                             seasonal = season, 
                                             seasonal_periods = i, 
-                                            damped_trend = dam_trend).fit()
+                                            damped_trend = dam_trend).fit(disp = False)
                             pred_1 = model_1.get_prediction(start = '2010', end = '2020')
                             df_1 = pred_1.summary_frame()
                             map = mean_absolute_percentage_error(df_train_test[nation][1]['GDP'], df_1['mean'])
@@ -361,10 +361,35 @@ def ets_order(df_train_test, nation_list):
                                                   trend = best_trend, 
                                                   seasonal = best_season, 
                                                   seasonal_periods = best_i,
-                                                  damped_trend = best_dam_trend).fit()
+                                                  damped_trend = best_dam_trend).fit(disp = False)
         model_list.append(best_model)
         x = [best_err, best_trend, best_season, best_i, best_dam_trend]
         df_params.append(x)
-    df_params = pd.DataFrame(df_params, index = nation_list)
+    df_params = pd.DataFrame(df_params, index = nation_list, columns = ['Error', 'Trend', 'Seasonal', 'Seasonal period', 'Damped trend'])
 
     return model_list, df_params
+
+def ets_prediction_plot(ets_model_list, nation_list, df_train_test):
+    ets_prediction_list = []
+    fig, ax = plt.subplots(5, 1, figsize = (15, 18))
+    plt.suptitle('Ets predictions', fontsize = 40)
+    plt.tight_layout(pad = 2.5)
+
+    for idx, model in enumerate(ets_model_list):
+        prediction = model.get_prediction(start = '2010', end = '2020')
+        df_pred = prediction.summary_frame()
+        ets_prediction_list.append(df_pred['mean'])
+        #ax[idx].figure(figsize = (15, 5))
+        ax[idx].set_title(f'Ets model for {nation_list[idx]} GDP')
+
+        ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
+        ax[idx].plot(model.fittedvalues, 'orange', label = 'In-sample predictions')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'].index, df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+
+        ax[idx].set_xlabel('Time')
+        ax[idx].set_ylabel('Values')
+        ax[idx].legend(loc = 'upper left')
+
+    plt.show()
+    return ets_prediction_list
