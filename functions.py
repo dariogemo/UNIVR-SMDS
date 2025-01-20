@@ -480,6 +480,25 @@ def varmax_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
     
     return results, varmax_model_list
 
+def invert_first_order_differencing(differenced_series, original_series):
+    """
+    Inverts a first-order differencing to reconstruct the original series.
+    
+    Parameters:
+        differenced_series (pd.Series): The differenced series (e.g., output of `series.diff()`).
+        original_series (pd.Series): The original series (must include the first value of the original series).
+    
+    Returns:
+        pd.Series: The reconstructed original series.
+    """
+    # Ensure inputs are pandas Series
+    if not isinstance(differenced_series, pd.Series) or not isinstance(original_series, pd.Series):
+        raise ValueError("Both inputs must be pandas Series.")
+    
+    # Reconstruct the original series
+    inverted_series = differenced_series.cumsum() + original_series.iloc[0]
+    return inverted_series
+
 def varma_prediction_plot(varma_model_list, nation_list, order_list, df_train_test):
     varma_prediction_list = []
     fig, ax = plt.subplots(5, 1, figsize = (15, 18))
@@ -487,17 +506,16 @@ def varma_prediction_plot(varma_model_list, nation_list, order_list, df_train_te
     plt.tight_layout(pad = 2.5)
 
     for idx, model in enumerate(varma_model_list):
-        prediction = model.get_prediction(start = '2010', end = '2020',
-                                          dynamic = False
-                                          )
+        prediction = model.get_prediction(start = '2010', end = '2020')
         df_pred = prediction.summary_frame()
+        df_pred['mean'] = invert_first_order_differencing(df_pred['mean'], df_train_test[nation_list[idx]][1]['GDP'])
         varma_prediction_list.append(df_pred['mean'])
-        #ax[idx].figure(figsize = (15, 5))
-        ax[idx].set_title(f'ARIMA{order_list[idx]} model for {nation_list[idx]} GDP')
+
+        ax[idx].set_title(f'Varma{order_list[idx]} model for {nation_list[idx]} GDP')
 
         ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
         #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
-        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'].index, df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
+        ax[idx].plot(df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
         ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
 
         ax[idx].set_xlabel('Time')
