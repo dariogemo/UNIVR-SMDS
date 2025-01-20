@@ -479,3 +479,30 @@ def varmax_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
             results.append(None)
     
     return results, varmax_model_list
+
+def varma_prediction_plot(varma_model_list, nation_list, order_list, df_train_test):
+    varma_prediction_list = []
+    fig, ax = plt.subplots(5, 1, figsize = (15, 18))
+    plt.suptitle('Varma predictions', fontsize = 40)
+    plt.tight_layout(pad = 2.5)
+
+    for idx, model in enumerate(varma_model_list):
+        prediction = model.get_prediction(start = '2010', end = '2020',
+                                          dynamic = False
+                                          )
+        df_pred = prediction.summary_frame()
+        varma_prediction_list.append(df_pred['mean'])
+        #ax[idx].figure(figsize = (15, 5))
+        ax[idx].set_title(f'ARIMA{order_list[idx]} model for {nation_list[idx]} GDP')
+
+        ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
+        #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'].index, df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+
+        ax[idx].set_xlabel('Time')
+        ax[idx].set_ylabel('Values')
+        ax[idx].legend(loc = 'upper left')
+
+    plt.show()
+    return varma_prediction_list
