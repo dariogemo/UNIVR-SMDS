@@ -18,6 +18,7 @@ from statsmodels.tsa.api import VAR
 from statsmodels.tsa.statespace.varmax import VARMAX
 
 def preprocess_df(df):
+    df = df.replace('China, Hong Kong SAR', 'Hong Kong')
     all_nation_list = df.index.unique()
     all_val_nation_list = []
     for nation in all_nation_list:
@@ -33,40 +34,36 @@ def preprocess_df(df):
     mask = count_df.sum(axis = 1) == 884
     valid_nations = list(count_df[mask].index)
     df = df[df['Country'].isin(valid_nations)]
-    #df.columns = [['Country', 'IndicatoName', pd.date_range(start = 1970, periods = 51, freq = 'YE').year]]
-
     return df, valid_nations
 
 def nation_input(number, valid_nations, df):   
     adj_list = ['first', 'second', 'third', 'fourth', 'fifth']
     while True:
-        first = input(f'Please input {adj_list[number]} nation: ')
-        first = first.lower().capitalize()
-        number = number+1 
-        if len(first) == 1:
-            first = first.lower()
-        if not first and number == 1:
-            first = 'Finland'
-        if not first and number == 2:
-            first = 'Argentina'
-        if not first and number == 3:
-            first = 'Belgium'
-        if not first and number == 4:
-            first = 'Philippines'
-        if not first and number == 5:
-            first = 'Germany'
-        if first in valid_nations:
-            break
-        if first in df['Country'].unique() and first not in valid_nations:
-            print(f'Not enough data for {first}.\nPlease enter a valid nation.\n-----------------')
+        nation = input(f'Please input {adj_list[number]} nation: ')
+        nation = nation.strip().title()
+
+        if not nation and number == 0:
+            nation = 'Finland'
+        elif not nation and number == 1:
+            nation = 'Sweden'
+        elif not nation and number == 2:
+            nation = 'Portugal'
+        elif not nation and number == 3:
+            nation = 'Algeria'
+        elif not nation and number == 4:
+            nation = 'Germany'
+        
+        if nation in valid_nations:
+            return nation
+        elif nation in df['Country'].unique() and nation not in valid_nations:
+            print(f'Not enough data for {nation}.\nPlease enter a valid nation.\n-----------------')
         else:
-            print(f'{first} is either misspelled or not a nation.\nPlease enter a valid nation.\n-----------------')
-    return first
+            print(f'{nation} is either misspelled or not a nation.\nPlease enter a valid nation.\n-----------------')
 
 def create_nation_list(valid_nations, df): 
     nation_list = []
-    for nation_num in range(5):
-        nation = nation_input(nation_num, valid_nations, df)
+    for nation_num in range(5): 
+        nation = nation_input(nation_num, valid_nations, df) 
         nation_list.append(nation)
     return nation_list
 
@@ -325,10 +322,10 @@ def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_te
 
 def add_metrics(model_name:str, model_list, metrics_list, df_train_test, nation_list, prediction_list):
     for idx, model in enumerate(model_list):
-        metrics = pd.Series({'Model_name': model_name, 'AIC':model.aic, 
-                            'RMSE': root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]),
-                            'MAE': mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]), 
-                            'MAPE':mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])})
+        metrics = pd.Series({'Model_name': model_name, 'AIC': round(model.aic), 
+                            'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP']), prediction_list[idx]),
+                            'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP']), prediction_list[idx]), 
+                            'MAPE': mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])})
         metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
     return metrics_list
 
@@ -351,7 +348,10 @@ def ets_order(df_train_test, nation_list):
                                             damped_trend = dam_trend).fit(disp = False)
                             pred_1 = model_1.get_prediction(start = '2010', end = '2020')
                             df_1 = pred_1.summary_frame()
-                            map = mean_absolute_percentage_error(df_train_test[nation][1]['GDP'], df_1['mean'])
+                            if df_1['mean'].isnull().sum() == 0:
+                                map = mean_absolute_percentage_error(df_train_test[nation][1]['GDP'], df_1['mean'])
+                            else:
+                                pass
                         if(map < best_map):
                             best_map = map
                             best_err = err
@@ -415,7 +415,7 @@ def grangers_causation_columns(df_train_test_log_dif, nation_list):
         optimal_lag = lag_selection.aic
 
         df = grangers_causation(df_train_test_log_dif[nation][0], df_train_test_log_dif[nation][0].columns,'ssr_chi2test', optimal_lag)
-        indexes = df[df['GDP'] > 0.05].index.tolist()
+        indexes = df[df['GDP'] < 0.05].index.tolist()
         grangers_columns.append(indexes)
         print(f'Best columns: {indexes}')
 
@@ -423,7 +423,7 @@ def grangers_causation_columns(df_train_test_log_dif, nation_list):
 
 from statsmodels.tsa.api import VARMAX
 
-def varmax_order(df_train_test_log_dif, nation_list, grangers_causation_columns):
+def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns):
     """
     Finds the best VARMAX order (p, q) for each nation using AIC.
     
@@ -524,3 +524,71 @@ def varma_prediction_plot(varma_model_list, nation_list, order_list, df_train_te
 
     plt.show()
     return varma_prediction_list
+
+def varma2_order(df_train_test_log_dif, nation_list):
+    """
+    Finds the best VARMAX order (p, q) for each nation using AIC.
+    
+    Parameters:
+        df_train_test_log_dif (dict): Dictionary of time series data for each nation.
+        nation_list (list): List of nation names.
+        grangers_causation_columns (list): List of lists containing the selected columns for each nation.
+    
+    Returns:
+        tuple: A list of (p, q) orders and a list of fitted VARMAX models for each nation.
+    """
+    varmax_model_list = []
+    results = []
+    
+    for idx, nation in enumerate(nation_list):
+        print(f"Processing nation: {nation}")
+        best_aic = float("inf")
+        best_p, best_q = None, None
+        best_model = None
+        
+        # Iterate over p and q
+        for p in range(1, 4):
+            for q in range(1, 4):
+                try:
+                    model = VARMAX(
+                        df_train_test_log_dif[nation][0],
+                        order=(p, q)
+                    ).fit(disp=False)
+                    aic = model.aic
+                    if aic < best_aic:
+                        best_aic = aic
+                        best_p, best_q = p, q
+                        best_model = model
+                except Exception as e:
+                    print(f"Error fitting VARMAX for {nation}, (p, q)=({p}, {q}): {e}")
+                    continue
+        
+        # Append best model and order
+        if best_model is not None:
+            varmax_model_list.append(best_model)
+            results.append([best_p, best_q])
+            print(f"Best order for {nation}: (p, q)=({best_p}, {best_q}), AIC={best_aic}")
+        else:
+            print(f"No valid model found for {nation}.")
+            varmax_model_list.append(None)
+            results.append(None)
+    
+    return results, varmax_model_list
+
+def best_model(metrics_df, nation_list):
+  for idx, df in enumerate(metrics_df):
+    mask = df['AIC'] == df['AIC'].min()
+    best_aic = df[mask]['Model_name'][0]
+    mask = df['MAE'] == df['MAE'].min()
+    best_mae = df[mask]['Model_name'][0]
+    mask = df['RMSE'] == df['RMSE'].min()
+    best_rmse = df[mask]['Model_name'][0]
+    mask = df['MAPE'] == df['MAPE'].min()
+    best_mape = df[mask]['Model_name'][0]
+    best_dic = {'Best AIC' : best_aic,
+                'Best MAE' : best_mae,
+                'Best RMSE' : best_rmse,
+                'Best MAPE' : best_mape}
+    best_df = pd.DataFrame(best_dic, index = [nation_list[idx]])
+    display(best_df)
+    print('\n')
