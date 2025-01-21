@@ -178,7 +178,9 @@ def log_transform(df_train_test):
     return df_train_test_x
 
 def difference(df_train_test, difference, nation):
-    tuple = (df_train_test[nation][0].diff(difference).dropna(), df_train_test[nation][1].diff().dropna())
+    full_df = pd.concat([df_train_test[nation][0], df_train_test[nation][1]])
+    diff_df = full_df.diff(difference).dropna()
+    tuple = train_test_split(diff_df)
     return tuple
 
 def detrend(df_train_test_log_dif, nation_list, seasons_list):
@@ -238,18 +240,13 @@ def arima_order(nation_list, df_train_test):
     order_list = []
     arima_model_list = []
     for idx, nation in enumerate(nation_list):
-        scaler = StandardScaler()
         print(nation)
-        X_train_scaled = scaler.fit_transform(df_train_test[nation][0].drop('GDP', axis=1))
-        X_test_scaled = scaler.transform(df_train_test[nation][1].drop('GDP', axis=1))
-        GDP_train_scaled = scaler.fit_transform(pd.DataFrame(df_train_test[nation][0]['GDP']))
-        GDP_test_scaled = scaler.fit_transform(pd.DataFrame(df_train_test[nation][1]['GDP']))
 
         best_model = auto_arima(
-        GDP_train_scaled, 
-        X = X_train_scaled,
-        start_p = 0, d = 2, start_q = 0, 
-        max_p = 5, max_q = 5,
+        df_train_test[nation][0]['GDP'], 
+        X = df_train_test[nation][0].drop('GDP', axis = 1),
+        start_p = 0, d = 1, start_q = 0, 
+        max_p = 8, max_q = 8,
         seasonal = False,
         error_action = 'warn', 
         with_intercept = True, 
@@ -263,10 +260,10 @@ def arima_order(nation_list, df_train_test):
 
         order_list.append(best_model.order)
 
-        arimax_model = ARIMA(GDP_train_scaled, 
-                     exog = X_train_scaled,
-                     order = best_model.order
-                     ).fit()
+        arimax_model = ARIMA(df_train_test[nation][0]['GDP'], 
+                             exog = df_train_test[nation][0].drop('GDP', axis = 1),
+                             order = best_model.order
+                             ).fit()
         
         arima_model_list.append(arimax_model)
     return order_list, arima_model_list
@@ -294,24 +291,25 @@ def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_te
     plt.tight_layout(pad = 2.5)
 
     for idx, model in enumerate(arima_model_list):
-        scaler = StandardScaler()
-        X_test_scaled = scaler.fit_transform(df_train_test[nation_list[idx]][0].drop('GDP', axis=1))
-        GDP_test_scaled = scaler.fit_transform(pd.DataFrame(df_train_test[nation_list[idx]][1]['GDP']))
-        prediction = model.get_prediction(start = 0, end = 10,
-                                          exog = X_test_scaled,
+        prediction = model.get_prediction(start = '2010', end = '2020',
+                                          exog = df_train_test[nation_list[idx]][1].drop('GDP', axis = 1),
                                           dynamic = False
                                           )
         df_pred = prediction.summary_frame()
-        # Reverse scaling for predictions
-        df_pred['mean'] = scaler.inverse_transform(df_pred[['mean']])
+        pred_ci_original = prediction.conf_int()
         arima_prediction_list.append(df_pred['mean'])
-        #ax[idx].figure(figsize = (15, 5))
         ax[idx].set_title(f'ARIMA{order_list[idx]} model for {nation_list[idx]} GDP')
 
         ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
-        #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
-        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'].index, df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
+        ax[idx].plot(model.fittedvalues, 'orange', label = 'In-sample predictions')
+        ax[idx].plot(df_pred['mean'],'-k', label = 'Out-of-sample forecasting')
         ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+        ax[idx].fill_between(
+            df_train_test[nation_list[idx]][1]['GDP'].index, 
+            pred_ci_original['lower GDP'], 
+            pred_ci_original['upper GDP'], 
+            color = 'blue', alpha = 0.2, label='Confidence Interval'
+        )
 
         ax[idx].set_xlabel('Time')
         ax[idx].set_ylabel('Values')
@@ -323,8 +321,8 @@ def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_te
 def add_metrics(model_name:str, model_list, metrics_list, df_train_test, nation_list, prediction_list):
     for idx, model in enumerate(model_list):
         metrics = pd.Series({'Model_name': model_name, 'AIC': round(model.aic), 
-                            'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP']), prediction_list[idx]),
-                            'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP']), prediction_list[idx]), 
+                            'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])),
+                            'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])), 
                             'MAPE': mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])})
         metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
     return metrics_list
@@ -382,13 +380,18 @@ def ets_prediction_plot(ets_model_list, nation_list, df_train_test):
         prediction = model.get_prediction(start = '2010', end = '2020')
         df_pred = prediction.summary_frame()
         ets_prediction_list.append(df_pred['mean'])
-        #ax[idx].figure(figsize = (15, 5))
         ax[idx].set_title(f'Ets model for {nation_list[idx]} GDP')
 
         ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
         ax[idx].plot(model.fittedvalues, 'orange', label = 'In-sample predictions')
         ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'].index, df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
         ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+        ax[idx].fill_between(
+            df_train_test[nation_list[idx]][1]['GDP'].index, 
+            df_pred['pi_lower'], 
+            df_pred['pi_upper'], 
+            color = 'blue', alpha = 0.2, label='Confidence Interval'
+        )
 
         ax[idx].set_xlabel('Time')
         ax[idx].set_ylabel('Values')
@@ -437,26 +440,26 @@ def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
     """
     varmax_model_list = []
     results = []
-    
+
     for idx, nation in enumerate(nation_list):
         print(f"Processing nation: {nation}")
         best_aic = float("inf")
         best_p, best_q = None, None
         best_model = None
-        
-        # Ensure there are columns to model
+        grangers_causation_columns[idx].append('GDP')
+
         if not grangers_causation_columns[idx]:
             print(f"No causal columns for {nation}, skipping.")
             results.append(None)
             varmax_model_list.append(None)
             continue
         
-        # Iterate over p and q
         for p in range(1, 4):
             for q in range(1, 4):
                 try:
                     model = VARMAX(
                         df_train_test_log_dif[nation][0][grangers_causation_columns[idx]],
+                        exog = df_train_test_log_dif[nation][0].drop(grangers_causation_columns[idx], axis = 1),
                         order=(p, q)
                     ).fit(disp=False)
                     aic = model.aic
@@ -468,7 +471,6 @@ def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
                     print(f"Error fitting VARMAX for {nation}, (p, q)=({p}, {q}): {e}")
                     continue
         
-        # Append best model and order
         if best_model is not None:
             varmax_model_list.append(best_model)
             results.append([best_p, best_q])
@@ -499,16 +501,23 @@ def invert_first_order_differencing(differenced_series, original_series):
     inverted_series = differenced_series.cumsum() + original_series.iloc[0]
     return inverted_series
 
-def varma_prediction_plot(varma_model_list, nation_list, order_list, df_train_test):
+def varma1_prediction_plot(varma_model_list, nation_list, order_list, df_train_test, df_train_test_log_dif, grangers_col_list):
     varma_prediction_list = []
     fig, ax = plt.subplots(5, 1, figsize = (15, 18))
     plt.suptitle('Varma predictions', fontsize = 40)
     plt.tight_layout(pad = 2.5)
 
     for idx, model in enumerate(varma_model_list):
-        prediction = model.get_prediction(start = '2010', end = '2020')
+        prediction = model.get_prediction(start = '2010', end = '2020',
+                                          exog = df_train_test_log_dif[nation_list[idx]][1].drop(grangers_col_list[idx], axis = 1),
+                                          dynamic = False)
         df_pred = prediction.summary_frame()
+        pred_ci = prediction.conf_int()
         df_pred['mean'] = invert_first_order_differencing(df_pred['mean'], df_train_test[nation_list[idx]][1]['GDP'])
+        pred_ci_original = pd.DataFrame({
+            'lower': invert_first_order_differencing(pred_ci.loc[:, 'lower GDP'], df_train_test[nation_list[idx]][1]['GDP']),
+            'upper': invert_first_order_differencing(pred_ci.loc[:, 'upper GDP'], df_train_test[nation_list[idx]][1]['GDP'])
+})      
         varma_prediction_list.append(df_pred['mean'])
 
         ax[idx].set_title(f'Varma{order_list[idx]} model for {nation_list[idx]} GDP')
@@ -517,6 +526,12 @@ def varma_prediction_plot(varma_model_list, nation_list, order_list, df_train_te
         #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
         ax[idx].plot(df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
         ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+        ax[idx].fill_between(
+            df_train_test['Finland'][1]['GDP'].index, 
+            pred_ci_original['lower'], 
+            pred_ci_original['upper'], 
+            color = 'blue', alpha = 0.2, label = 'Confidence Interval'
+        )
 
         ax[idx].set_xlabel('Time')
         ax[idx].set_ylabel('Values')
@@ -541,14 +556,14 @@ def varma2_order(df_train_test_log_dif, nation_list):
     results = []
     
     for idx, nation in enumerate(nation_list):
-        print(f"Processing nation: {nation}")
+        print(f'Processing nation: {nation}')
         best_aic = float("inf")
         best_p, best_q = None, None
         best_model = None
         
         # Iterate over p and q
-        for p in range(1, 4):
-            for q in range(1, 4):
+        for p in range(1, 3):
+            for q in range(1, 3):
                 try:
                     model = VARMAX(
                         df_train_test_log_dif[nation][0],
@@ -567,13 +582,54 @@ def varma2_order(df_train_test_log_dif, nation_list):
         if best_model is not None:
             varmax_model_list.append(best_model)
             results.append([best_p, best_q])
-            print(f"Best order for {nation}: (p, q)=({best_p}, {best_q}), AIC={best_aic}")
+            print(f"Best order for {nation}: (p, q) = ({best_p}, {best_q}), AIC = {best_aic}")
         else:
             print(f"No valid model found for {nation}.")
             varmax_model_list.append(None)
             results.append(None)
     
     return results, varmax_model_list
+
+def varma2_prediction_plot(varma_model_list, nation_list, order_list, df_train_test, df_train_test_log_dif):
+    varma_prediction_list = []
+    fig, ax = plt.subplots(5, 1, figsize = (15, 18))
+    plt.suptitle('Varma predictions', fontsize = 40)
+    plt.tight_layout(pad = 2.5)
+
+    for idx, model in enumerate(varma_model_list):
+        prediction = model.get_prediction(start = '2010', end = '2020',
+                                          exog = df_train_test_log_dif[nation_list[idx]][1].drop('GDP', axis = 1),
+                                          dynamic = False)
+        df_pred = prediction.summary_frame()
+        pred_ci = prediction.conf_int()
+        df_pred['mean'] = invert_first_order_differencing(df_pred['mean'], df_train_test[nation_list[idx]][1]['GDP'])
+        pred_ci_original = pd.DataFrame({
+            'lower': invert_first_order_differencing(pred_ci.loc[:, 'lower GDP'], df_train_test[nation_list[idx]][1]['GDP']),
+            'upper': invert_first_order_differencing(pred_ci.loc[:, 'upper GDP'], df_train_test[nation_list[idx]][1]['GDP'])
+})
+        varma_prediction_list.append(df_pred['mean'])
+
+        ax[idx].set_title(f'Varma{order_list[idx]} model for {nation_list[idx]} GDP')
+
+        ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
+        #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
+        ax[idx].plot(df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+        ax[idx].plot(df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
+        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+        ax[idx].fill_between(
+            df_train_test['Finland'][1]['GDP'].index, 
+            pred_ci_original['lower'], 
+            pred_ci_original['upper'], 
+            color = 'blue', alpha = 0.2, label = 'Confidence Interval'
+        )
+
+        ax[idx].set_xlabel('Time')
+        ax[idx].set_ylabel('Values')
+        ax[idx].legend(loc = 'upper left')
+
+    plt.show()
+    return varma_prediction_list
 
 def best_model(metrics_df, nation_list):
   for idx, df in enumerate(metrics_df):
