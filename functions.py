@@ -647,4 +647,3 @@ def best_model(metrics_df, nation_list):
                 'Best MAPE' : best_mape}
     best_df = pd.DataFrame(best_dic, index = [nation_list[idx]])
     display(best_df)
-    print('\n')
