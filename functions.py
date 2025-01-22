@@ -16,6 +16,7 @@ from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_a
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.statespace.varmax import VARMAX
+import matplotlib as mpl
 
 def preprocess_df(df : pd.DataFrame):
     """
@@ -50,8 +51,9 @@ def nation_input(number : int, valid_nations : list, df : pd.DataFrame):
     Ask the user for a nation
     """   
     adj_list = ['first', 'second', 'third', 'fourth', 'fifth']
+    nat_list = ['Finland', 'Sweden', 'Portugal', 'Algeria', 'Germany']
     while True:
-        nation = input(f'Please input {adj_list[number]} nation: ')
+        nation = input(f'Please input {adj_list[number]} nation. Press Enter to use the default nation ({nat_list[number]})')
         nation = nation.strip().title()
 
         if not nation and number == 0:
@@ -83,6 +85,7 @@ def create_nation_list(valid_nations : list, df : pd.DataFrame):
     Returns:
         list: a list of the selected nations to analyze
     """
+    descr = input("The notebook will ask for 5 different nations that you want to perform the analysis about GDP forecasting. A list of valid nations can be found in the file valid_nations.csv in the GitHub page of this project. Any wrong input or nation that isn't included in that file will not be accepted.\n\n Press Enter to continue.")
     nation_list = []
     for nation_num in range(5): 
         nation = nation_input(nation_num, valid_nations, df) 
@@ -169,7 +172,7 @@ def plotseasonal(res, axes):
     res.resid.plot(ax=axes[3], legend=False)
     axes[3].set_ylabel('Residual')
 
-def roll_mean_std_plot(df, nation_list, roll_num):
+def roll_mean_std_plot(df, nation_list, roll_num, cmap):
     fig, ax = plt.subplots(len(nation_list), 1, figsize = (15, 15))
     plt.suptitle('GDP of the nations', fontsize = 40)
     plt.tight_layout(pad = 2.5)
@@ -177,9 +180,9 @@ def roll_mean_std_plot(df, nation_list, roll_num):
     for idx, nation in enumerate(nation_list):
         rolling_mean = df[nation][0]['GDP'].rolling(roll_num).mean()
         rolling_std = df[nation][0]['GDP'].rolling(roll_num).std()
-        lineplot(df[nation][0]['GDP'], ax = ax[idx])
-        ax[idx].plot(rolling_mean, color = 'red', label = 'Rolling Mean')
-        ax[idx].plot(rolling_std, color = 'black', label = 'Rolling Std')
+        lineplot(df[nation][0]['GDP'], ax = ax[idx], c = cmap[3])
+        ax[idx].plot(rolling_mean, color = cmap[0], label = 'Rolling Mean')
+        ax[idx].plot(rolling_std, color = cmap[1], label = 'Rolling Std')
         ax[idx].set_title(nation, fontsize = 20)
         ax[idx].legend(loc = 'best')
 
@@ -253,7 +256,7 @@ def detrend(df_train_test_log_dif, nation_list, seasons_list):
     return df_train_test_log_dif_detrend
 
 def spd(nation, df_train_test, Fs):
-    f_per, Pxx_per = periodogram(df_train_test[nation][0]['GDP'], Fs, detrend = None,window = 'triang',return_onesided = True, scaling = 'density')
+    f_per, Pxx_per = periodogram(df_train_test[nation][0]['GDP'], Fs, detrend = None, window = 'triang',return_onesided = True, scaling = 'density')
     f_per = f_per[1:]
     Pxx_per = Pxx_per[1:]
 
@@ -332,9 +335,13 @@ def arima_diagnostics(arima_model_list, nation_list):
     for idx, model in enumerate(arima_model_list):
         print(f"Summary and diagnostics for {nation_list[idx]}'s arima model\n")
         print(model.summary())
+        mpl.rcdefaults()
         model.plot_diagnostics(figsize = (10, 7))
         plt.show()
         print('--------------------------------------')
+    plt.rcParams['lines.linewidth'] = 2.5
+    plt.rcParams.update({'axes.facecolor' : 'w'}) 
+    plt.rcParams['figure.facecolor'] = 'f7ead4'
 
 def res_stats(arima_model_list, nation_list, df_train_test):
     for idx, model in enumerate(arima_model_list):
@@ -589,6 +596,7 @@ def varma1_prediction_plot(varma_model_list, nation_list, order_list, df_train_t
         df_pred = prediction.summary_frame()
         pred_ci = prediction.conf_int()
         df_pred['mean'] = invert_first_order_differencing(df_pred['mean'], df_train_test[nation_list[idx]][1]['GDP'])
+        inverse_fitted = invert_first_order_differencing(model.fittedvalues['GDP'], df_train_test[nation_list[idx]][0]['GDP'])
         pred_ci_original = pd.DataFrame({
             'lower': invert_first_order_differencing(pred_ci.loc[:, 'lower GDP'], df_train_test[nation_list[idx]][1]['GDP']),
             'upper': invert_first_order_differencing(pred_ci.loc[:, 'upper GDP'], df_train_test[nation_list[idx]][1]['GDP'])
@@ -598,7 +606,7 @@ def varma1_prediction_plot(varma_model_list, nation_list, order_list, df_train_t
         ax[idx].set_title(f'Varma{order_list[idx]} model for {nation_list[idx]} GDP')
 
         ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
-        #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
+        ax[idx].plot(inverse_fitted, 'orange', label = 'In-sample predictions')
         ax[idx].plot(df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
         ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
         ax[idx].fill_between(
@@ -677,6 +685,7 @@ def varma2_prediction_plot(varma_model_list, nation_list, order_list, df_train_t
                                           dynamic = False)
         df_pred = prediction.summary_frame()
         pred_ci = prediction.conf_int()
+        inverse_fitted = invert_first_order_differencing(model.fittedvalues['GDP'], df_train_test[nation_list[idx]][0]['GDP'])
         df_pred['mean'] = invert_first_order_differencing(df_pred['mean'], df_train_test[nation_list[idx]][1]['GDP'])
         pred_ci_original = pd.DataFrame({
             'lower': invert_first_order_differencing(pred_ci.loc[:, 'lower GDP'], df_train_test[nation_list[idx]][1]['GDP']),
@@ -687,9 +696,7 @@ def varma2_prediction_plot(varma_model_list, nation_list, order_list, df_train_t
         ax[idx].set_title(f'Varma{order_list[idx]} model for {nation_list[idx]} GDP')
 
         ax[idx].plot(df_train_test[nation_list[idx]][0]['GDP'], '-b', label = 'Data Train')
-        #plt.plot(df_train_test['Finland'][0]['GDP'].index, inverse_fitted, 'orange', label = 'In-sample predictions')
-        ax[idx].plot(df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
-        ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
+        ax[idx].plot(inverse_fitted, 'orange', label = 'In-sample predictions')
         ax[idx].plot(df_pred['mean'],'-k',label = 'Out-of-sample forecasting')
         ax[idx].plot(df_train_test[nation_list[idx]][1]['GDP'], label = 'Data Test')
         ax[idx].fill_between(
