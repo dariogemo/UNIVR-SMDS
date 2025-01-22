@@ -17,7 +17,16 @@ from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.statespace.varmax import VARMAX
 
-def preprocess_df(df):
+def preprocess_df(df : pd.DataFrame):
+    """
+    Preprocesses the dataframe removing the nations that don't have all the required columns/values.
+
+    Paramenters:
+        df (pandas dataframe): DataFrame with macroeconomic indicators evolution over the years
+
+    Returns:
+        tuple: The dataframe with only the valid nations and a list of strings of valid nations
+    """
     df = df.replace('China, Hong Kong SAR', 'Hong Kong')
     all_nation_list = df.index.unique()
     all_val_nation_list = []
@@ -36,7 +45,10 @@ def preprocess_df(df):
     df = df[df['Country'].isin(valid_nations)]
     return df, valid_nations
 
-def nation_input(number, valid_nations, df):   
+def nation_input(number : int, valid_nations : list, df : pd.DataFrame):
+    """
+    Ask the user for a nation
+    """   
     adj_list = ['first', 'second', 'third', 'fourth', 'fifth']
     while True:
         nation = input(f'Please input {adj_list[number]} nation: ')
@@ -60,14 +72,33 @@ def nation_input(number, valid_nations, df):
         else:
             print(f'{nation} is either misspelled or not a nation.\nPlease enter a valid nation.\n-----------------')
 
-def create_nation_list(valid_nations, df): 
+def create_nation_list(valid_nations : list, df : pd.DataFrame): 
+    """
+    Function asking the user for an input about the nation he wants to analyze that must be inside the list of valid nations.
+
+    Parameters:
+        valid_nations (list): a list of valid nations that the input must be inside of
+        df (pandas DataFrame): the dataframe containing the values of the macroeconomic indicators
+    
+    Returns:
+        list: a list of the selected nations to analyze
+    """
     nation_list = []
     for nation_num in range(5): 
         nation = nation_input(nation_num, valid_nations, df) 
         nation_list.append(nation)
     return nation_list
 
-def create_df(df):
+def create_df(df : pd.DataFrame):
+    """
+    Transforms the input dataframe in a dataframe with time as index and 4 macroeconomic indicators as columns. The indicators are: 'Exports of goods and services', 'Imports of goods and services', 'Gross Domestic Product (GDP)', 'Manufacturing (ISIC D)', 'Gross capital formation'
+
+    Parameters:
+        df (pandas DataFrame): dataframe to be transformed. It must be of only one nation
+    
+    Returns:
+        DataFrame: transformed dataframe 
+    """
     df = df.reset_index().drop(['Country', 'CountryID'], axis = 1)
     df = df.T.reset_index().drop(['index'], axis = 1)
     df.columns = df.loc[0]
@@ -78,7 +109,18 @@ def create_df(df):
     df.columns = ['Exports', 'Imports', 'Manufacturing', 'Gross_capital', 'GDP']
     return df
 
-def highest_corr_variable(corr_list, max_list, nation_list):
+def highest_corr_variable(corr_list : list, nation_list : list):
+    """
+    Displays the column that has highest correlation with the GDP column.
+
+    Parameters:
+        corr_list (list): list containing the correlation dataframes of the 5 nations
+        nation_list (list): list containing the strings of the 5 nations
+
+    Returns:
+        None
+    """
+    max_list = []
     for corr in corr_list:
         max_corr = corr['GDP'].drop('GDP').max()
         idx = corr.index[corr['GDP'] == max_corr].tolist()[0]
@@ -86,12 +128,30 @@ def highest_corr_variable(corr_list, max_list, nation_list):
     df = pd.DataFrame(max_list, index = nation_list, columns = ['Highest correlation variable'])
     display(df)
 
-def lowest_corr_variable(corr_df):
+def lowest_corr_variable(corr_df : pd.DataFrame):
+    """
+    Given a dataframe about correlation, it outputs the columns that have the lowest correlation between each other
+
+    Parameters:
+        corr_df (pandas DataFrame): dataframe containing the correlations between macroeconomic indicators of a nation
+
+    Returns:
+        list: list containing tuples of the nations' lowest correlation variables with each other
+    """
     cgdpd = corr_df.drop('GDP', axis = 1).replace({1 : np.nan})
     idx = cgdpd.stack().idxmin()
     return idx
 
-def train_test_split(df):
+def train_test_split(df : pd.DataFrame):
+    """
+    Splits the dataframe into a train set from 1970 to 2009 and a test set from 2010 to 2020
+
+    Parameters:
+        df (pandas DataFrame): dataframe containing the values of the indicators and time as index
+
+    Returns:
+        list: list containing the train dataframe and the test dataframe
+    """
     train = df.loc[:'2009-01-01']
     train = train.astype('float')
     test = df.loc['2010-01-01':]
@@ -333,7 +393,7 @@ def ets_order(df_train_test, nation_list):
     for nation in nation_list:
         best_map = 100
         best_i = 0
-        for i in range(2, 14):
+        for i in range(2, 16):
             for err in ['add', 'mul']:
                 for trend in ['add', 'mul']:
                     for season in ['add', 'mul']:
@@ -481,6 +541,21 @@ def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
             results.append(None)
     
     return results, varmax_model_list
+
+def varmax_diagnostics(model_list, nation_list):
+    for idx, model in enumerate(model_list):
+        print(f"Summary and diagnostics for {nation_list[idx]}'s varmax model\n")
+        print(model.summary())
+        plt.show()
+        print('--------------------------------------')
+
+def var_res_stats(arima_model_list, nation_list, df_train_test):
+    for idx, model in enumerate(arima_model_list):
+        stand_resid = np.reshape(model.standardized_forecasts_error[-1], len(df_train_test[nation_list[idx]][0]['GDP']))
+        print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
+        display(acorr_ljungbox(stand_resid, lags = 10))
+        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+        print('-------------------------------------------------------------------------------')
 
 def invert_first_order_differencing(differenced_series, original_series):
     """
