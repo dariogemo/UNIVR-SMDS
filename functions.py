@@ -12,11 +12,12 @@ from sklearn.preprocessing import StandardScaler
 from pmdarima import auto_arima
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.exponential_smoothing.ets import ETSModel
-from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, mean_squared_error
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.statespace.varmax import VARMAX
 import matplotlib as mpl
+from sklearn.linear_model import LinearRegression
 
 def preprocess_df(df : pd.DataFrame):
     """
@@ -299,6 +300,98 @@ def create_metrics_df():
     metrics_list_of_df = [df_metrics_1, df_metrics_2, df_metrics_3, df_metrics_4, df_metrics_5]
     return metrics_list_of_df
 
+def slr_prediction_plot(nation_list, df_train_test):
+    slr_model_list = []
+    slr_prediction_list = []
+    aic_list = []
+    fig, ax = plt.subplots(5, 1, figsize = (15, 18))
+    plt.suptitle('Simple linear regression predictions', fontsize = 40)
+    plt.tight_layout(pad = 2.5)
+
+    for idx, nation in enumerate(nation_list):
+        model = LinearRegression()
+        X_train = pd.DataFrame(df_train_test[nation][0]['GDP'].index.year)
+        y_train = df_train_test[nation][0]['GDP']
+        X_test = pd.DataFrame(df_train_test[nation][1]['GDP'].index.year)
+        y_test = df_train_test[nation][1]['GDP']
+
+        model.fit(X_train, y_train)
+        y_fit = model.predict(X_train)
+        y_fit = pd.Series(y_fit, index = y_train.index)
+        y_pred = model.predict(X_test)
+        y_pred = pd.Series(y_pred, index = y_test.index)
+
+        rss = np.sum((y_train - y_fit) ** 2)
+        n = X_train.shape[0]
+        k = X_train.shape[1] + 1 
+        sigma_squared = mean_squared_error(y_train, y_fit)
+        log_likelihood = -n / 2 * (np.log(2 * np.pi * sigma_squared) + 1)
+        aic = 2 * k - 2 * log_likelihood
+
+        slr_model_list.append(model)
+        slr_prediction_list.append(y_pred)
+        aic_list.append(aic)
+
+        ax[idx].set_title(f"Linear regression model for {nation}'s GDP")
+
+        ax[idx].plot(y_pred, '-k', label = 'Out-of-sample forecasting')
+        ax[idx].plot(y_test, label = 'Data Test')
+        ax[idx].plot(y_train, '-b', label = 'Data Train')
+        ax[idx].plot(y_fit, 'orange', label = 'In-sample predictions')
+
+        ax[idx].set_xlabel('Time')
+        ax[idx].set_ylabel('Values')
+        ax[idx].legend(loc = 'upper left')
+
+    plt.show()
+    return slr_model_list, slr_prediction_list, aic_list
+
+def mlr_prediction_plot(nation_list, df_train_test):
+    mlr_model_list = []
+    mlr_prediction_list = []
+    aic_list = []
+    fig, ax = plt.subplots(5, 1, figsize = (15, 18))
+    plt.suptitle('Linear regression predictions', fontsize = 40)
+    plt.tight_layout(pad = 2.5)
+
+    for idx, nation in enumerate(nation_list):
+        model = LinearRegression()
+        X_train = df_train_test[nation][0].drop('GDP', axis = 1)
+        y_train = df_train_test[nation][0]['GDP']
+        X_test = df_train_test[nation][1].drop('GDP', axis = 1)
+        y_test = df_train_test[nation][1]['GDP']
+
+        model.fit(X_train, y_train)
+        y_fit = model.predict(X_train)
+        y_fit = pd.Series(y_fit, index = y_train.index)
+        y_pred = model.predict(X_test)
+        y_pred = pd.Series(y_pred, index = y_test.index)
+
+        rss = np.sum((y_train - y_fit) ** 2)
+        n = X_train.shape[0]
+        k = X_train.shape[1] + 1 
+        sigma_squared = mean_squared_error(y_train, y_fit)
+        log_likelihood = -n / 2 * (np.log(2 * np.pi * sigma_squared) + 1)
+        aic = 2 * k - 2 * log_likelihood
+
+        mlr_model_list.append(model)
+        mlr_prediction_list.append(y_pred)
+        aic_list.append(aic)
+
+        ax[idx].set_title(f'Linear regression {nation} model for {nation} GDP')
+
+        ax[idx].plot(y_pred, '-k', label = 'Out-of-sample forecasting')
+        ax[idx].plot(y_test, label = 'Data Test')
+        ax[idx].plot(y_train, '-b', label = 'Data Train')
+        ax[idx].plot(y_fit, 'orange', label = 'In-sample predictions')
+
+        ax[idx].set_xlabel('Time')
+        ax[idx].set_ylabel('Values')
+        ax[idx].legend(loc = 'upper left')
+
+    plt.show()
+    return mlr_model_list, mlr_prediction_list, aic_list
+
 def arima_order(nation_list, df_train_test):
     order_list = []
     arima_model_list = []
@@ -385,14 +478,25 @@ def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_te
     plt.show()
     return arima_prediction_list
 
-def add_metrics(model_name:str, model_list, metrics_list, df_train_test, nation_list, prediction_list):
-    for idx, model in enumerate(model_list):
-        metrics = pd.Series({'Model_name': model_name, 'AIC': round(model.aic), 
-                            'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])),
-                            'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])), 
-                            'MAPE': mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])})
-        metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
-    return metrics_list
+def add_metrics(model_name : str, model_list, metrics_list, df_train_test, nation_list, prediction_list, ls = False, aic_list = None):
+    if ls:
+        for idx, model in enumerate(model_list):
+            mae = round(mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]) * 100, 2)
+            metrics = pd.Series({'Model_name': model_name, 'AIC': round(aic_list[idx]), 
+                                'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])),
+                                'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])), 
+                                'MAPE': mae})
+            metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
+        return metrics_list
+    else:
+        for idx, model in enumerate(model_list):
+            mae = round(mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]) * 100, 2)
+            metrics = pd.Series({'Model_name': model_name, 'AIC': round(model.aic), 
+                                'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])),
+                                'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])), 
+                                'MAPE': mae})
+            metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
+        return metrics_list
 
 def ets_order(df_train_test, nation_list):
     df_params = []
