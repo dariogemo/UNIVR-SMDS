@@ -3,7 +3,9 @@ import numpy as np
 from statsmodels.tsa.stattools import adfuller, kpss
 from scipy.signal import periodogram, find_peaks
 import matplotlib.pyplot as plt
-from seaborn import lineplot
+from seaborn import lineplot, kdeplot, histplot, boxplot
+from statsmodels.api import qqplot
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.seasonal import STL
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.stats.stattools import durbin_watson
@@ -346,6 +348,31 @@ def slr_prediction_plot(nation_list, df_train_test):
     plt.show()
     return slr_model_list, slr_prediction_list, aic_list
 
+def res_diagnostics_plot(residuals, nation):
+    residuals = (residuals - np.mean(residuals)) / np.std(residuals)
+    fig, ax = plt.subplots(2, 2, figsize = (12, 8))
+    fig.tight_layout(pad = 5, h_pad = 4)
+    fig.suptitle(f'Residual diagnostic plot for {nation}', fontsize = 20)
+
+    norm = np.random.normal(size = 100000)
+    kdeplot(ax = ax[0][0], x = norm, color = '#1d4863', label = 'N(0,1)')
+    kdeplot(ax = ax[0][0], x = residuals, color = 'teal', label = 'Hist')
+    histplot(ax = ax[0][0], x = residuals, stat = 'density', linewidth = 0.5, kde = True, color = 'teal', bins = 15)
+    ax[0][0].set(title = 'Histogram of residuals', xlabel = 'Residual')
+    ax[0][0].legend()
+
+    boxplot(ax = ax[0][1], x = residuals, showmeans = True);
+    ax[0][1].set(title = 'Boxplot of residuals', xlabel = 'Residual')
+
+    qqplot(residuals, line = 'q', ax = ax[1][0]);
+    ax[1][0].set_title('Q-Q plot')
+
+    plot_acf(residuals, ax = ax[1][1], lags = 10)
+    ax[1][1].set(xlabel = 'Lags')
+    ax[1][1].set_title('Correlogram')
+
+    plt.show()
+
 def mlr_prediction_plot(nation_list, df_train_test):
     mlr_model_list = []
     mlr_prediction_list = []
@@ -424,7 +451,7 @@ def arima_order(nation_list, df_train_test):
         arima_model_list.append(arimax_model)
     return order_list, arima_model_list
 
-def arima_diagnostics(arima_model_list, nation_list):
+'''def arima_diagnostics(arima_model_list, nation_list):
     for idx, model in enumerate(arima_model_list):
         print(f"Summary and diagnostics for {nation_list[idx]}'s arima model\n")
         print(model.summary())
@@ -434,7 +461,7 @@ def arima_diagnostics(arima_model_list, nation_list):
         print('--------------------------------------')
     plt.rcParams['lines.linewidth'] = 2.5
     plt.rcParams.update({'axes.facecolor' : 'w'}) 
-    plt.rcParams['figure.facecolor'] = 'f7ead4'
+    plt.rcParams['figure.facecolor'] = 'f7ead4'''
 
 def res_stats(arima_model_list, nation_list, df_train_test):
     for idx, model in enumerate(arima_model_list):
@@ -442,7 +469,7 @@ def res_stats(arima_model_list, nation_list, df_train_test):
         print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
         display(acorr_ljungbox(stand_resid, lags = 10))
         print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
-        print('-------------------------------------------------------------------------------')
+        print('-------------------------------------------------------------------------------\n')
 
 def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_test):
     arima_prediction_list = []
@@ -653,12 +680,12 @@ def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
     
     return results, varmax_model_list
 
-def varmax_diagnostics(model_list, nation_list):
+'''def varmax_diagnostics(model_list, nation_list):
     for idx, model in enumerate(model_list):
         print(f"Summary and diagnostics for {nation_list[idx]}'s varmax model\n")
         print(model.summary())
         plt.show()
-        print('--------------------------------------')
+        print('--------------------------------------')'''
 
 def var_res_stats(arima_model_list, nation_list, df_train_test):
     for idx, model in enumerate(arima_model_list):
