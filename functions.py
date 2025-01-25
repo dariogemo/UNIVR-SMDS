@@ -121,6 +121,7 @@ def highest_corr_variable(corr_list : list, nation_list : list):
 
     Parameters:
         corr_list (list): list containing the correlation dataframes of the 5 nations
+
         nation_list (list): list containing the strings of the 5 nations
 
     Returns:
@@ -166,6 +167,17 @@ def train_test_split(df : pd.DataFrame):
     return lista
 
 def plotseasonal(res, axes):
+    """
+    Plot the original time series with its trend, seasonality and residuals
+
+    Parameters:
+        res (DecomposeResult): the DecomposeResult object resulting from seasonal_decompose
+
+        axes (Axes): Axes matplotlib object in which to plot the decomposition 
+    
+    Returns:
+        None
+    """
     res.observed.plot(ax=axes[0], legend=False)
     axes[0].set_ylabel('Observed')
     res.trend.plot(ax=axes[1], legend=False)
@@ -176,6 +188,21 @@ def plotseasonal(res, axes):
     axes[3].set_ylabel('Residual')
 
 def roll_mean_std_plot(df, nation_list, roll_num, cmap):
+    """
+    Plot a time series with its rolling mean and standard deviation
+
+    Paramenters:
+        df (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        roll_num (int): how many points to consider while calculating the rolling mean and std
+
+        cmap (list): list of html color codes
+
+    Returns:
+        None
+    """
     fig, ax = plt.subplots(len(nation_list), 1, figsize = (15, 15))
     plt.suptitle('GDP of the nations', fontsize = 40)
     plt.tight_layout(pad = 2.5)
@@ -191,50 +218,39 @@ def roll_mean_std_plot(df, nation_list, roll_num, cmap):
 
     plt.show()
 
-def check_stationarity(df_list, df_train_test, nation_list, dic = True):
+def check_stationarity(df_train_test, nation_list):
+    """
+    Checks whether the train sets of the provided time series are stationary, according to the ADFuller test and the KPSS test
+
+    Parameters:
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        nation_list (list): list containing the strings of the 5 nations
+
+    Returns:
+        DataFrame: A dataframe displaying statistics about stationarity tests of the various nations
+    """
     list_for_df = []
-    if dic == True:
-        for idx, df in enumerate(df_list):
-            adf_test = adfuller(df_train_test[nation_list[idx]][0]['GDP'], autolag='AIC')
-            lista_prova = []
-            lista_prova.append(adf_test[0])
-            lista_prova.append(adf_test[1])
-            if adf_test[1] <= 0.05:
-                lista_prova.append('Yes')
-            else:
-                lista_prova.append('No')
-            kpss_out = kpss(df_train_test[nation_list[idx]][0]['GDP'], regression='c', nlags='auto', store=True)
-            lista_prova.append(kpss_out[0])
-            lista_prova.append(kpss_out[1])
-            if kpss_out[1] >= 0.05:
-                lista_prova.append('Yes')
-            else:
-                lista_prova.append('No')
-            list_for_df.append(lista_prova)
-        final_df = pd.DataFrame(list_for_df, 
-                                columns = ['ADF', 'P-value for ADF', 'ADF stationarity', 'KPSS', 'P-value for KPSS', 'KPSS stationarity'], 
-                                index = [nation_list])
-    if dic == False:
-        for idx, df in enumerate(df_list):
-            adf_test = adfuller(df_train_test[nation_list[idx]], autolag='AIC')
-            lista_prova = []
-            lista_prova.append(adf_test[0])
-            lista_prova.append(adf_test[1])
-            if adf_test[1] <= 0.05:
-                lista_prova.append('Yes')
-            else:
-                lista_prova.append('No')
-            kpss_out = kpss(df_train_test[nation_list[idx]], regression='c', nlags='auto', store=True)
-            lista_prova.append(kpss_out[0])
-            lista_prova.append(kpss_out[1])
-            if kpss_out[1] >= 0.05:
-                lista_prova.append('Yes')
-            else:
-                lista_prova.append('No')
-            list_for_df.append(lista_prova)
-        final_df = pd.DataFrame(list_for_df, 
-                                columns = ['ADF', 'P-value for ADF', 'ADF stationarity', 'KPSS', 'P-value for KPSS', 'KPSS stationarity'], 
-                                index = [nation_list])
+    for idx, nation in enumerate(nation_list):
+        adf_test = adfuller(df_train_test[nation][0]['GDP'], autolag='AIC')
+        lista_prova = []
+        lista_prova.append(adf_test[0])
+        lista_prova.append(adf_test[1])
+        if adf_test[1] <= 0.05:
+            lista_prova.append('Yes')
+        else:
+            lista_prova.append('No')
+        kpss_out = kpss(df_train_test[nation][0]['GDP'], regression='c', nlags='auto', store=True)
+        lista_prova.append(kpss_out[0])
+        lista_prova.append(kpss_out[1])
+        if kpss_out[1] >= 0.05:
+            lista_prova.append('Yes')
+        else:
+            lista_prova.append('No')
+        list_for_df.append(lista_prova)
+    final_df = pd.DataFrame(list_for_df, 
+                            columns = ['ADF', 'P-value for ADF', 'ADF stationarity', 'KPSS', 'P-value for KPSS', 'KPSS stationarity'], 
+                            index = [nation_list])
     return final_df
 
 def log_transform(df_train_test):
@@ -244,6 +260,19 @@ def log_transform(df_train_test):
     return df_train_test_x
 
 def difference(df_train_test, difference, nation):
+    """
+    Performs differencing of a time series
+
+    Parameters:
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        difference (int): number of the lag to perform the differencing with. A difference equal to 1 performs first order differencing
+
+        nation (str): the nation to perform the differencing with
+    
+    Returns:
+        tuple: tuple containing the differenced train set and the differenced test set
+    """
     full_df = pd.concat([df_train_test[nation][0], df_train_test[nation][1]])
     diff_df = full_df.diff(difference).dropna()
     tuple = train_test_split(diff_df)
@@ -259,7 +288,20 @@ def detrend(df_train_test_log_dif, nation_list, seasons_list):
     return df_train_test_log_dif_detrend
 
 def spd(nation, df_train_test, Fs):
-    f_per, Pxx_per = periodogram(df_train_test[nation][0]['GDP'], Fs, detrend = None, window = 'triang',return_onesided = True, scaling = 'density')
+    """
+    Plot the periodogram of a time series with its prominent peaks and display a dataframe with the most important periods
+
+    Paramenters:
+        nation (str): nation to perform the power spectral analysis with
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        Fs (int): sampling rate
+
+    Returns:
+        int: best seasonality for the time series
+    """
+    f_per, Pxx_per = periodogram(df_train_test[nation][0]['GDP'], Fs, detrend = None, window = 'triang', return_onesided = True, scaling = 'density')
     f_per = f_per[1:]
     Pxx_per = Pxx_per[1:]
 
@@ -294,6 +336,12 @@ def spd(nation, df_train_test, Fs):
 # MODELS
 
 def create_metrics_df():
+    """
+    Creates an empty dataframe for the 5 nations where the metrics of the models will be stored. 
+
+    Returns:
+        list: list of empty dataframes to store the metrics
+    """
     df_metrics_1 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
     df_metrics_2 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
     df_metrics_3 = pd.DataFrame(columns = ['Model_name','AIC','MAE','RMSE','MAPE'])
@@ -679,13 +727,6 @@ def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
             results.append(None)
     
     return results, varmax_model_list
-
-'''def varmax_diagnostics(model_list, nation_list):
-    for idx, model in enumerate(model_list):
-        print(f"Summary and diagnostics for {nation_list[idx]}'s varmax model\n")
-        print(model.summary())
-        plt.show()
-        print('--------------------------------------')'''
 
 def var_res_stats(arima_model_list, nation_list, df_train_test):
     for idx, model in enumerate(arima_model_list):
