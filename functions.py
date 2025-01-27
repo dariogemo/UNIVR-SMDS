@@ -287,7 +287,7 @@ def detrend(df_train_test_log_dif : dict, nation_list : list, seasons_list : lis
         df_train_test_log_dif_detrend[nation] = df_train_test_log_dif[nation][0]['GDP'] - trend
     return df_train_test_log_dif_detrend
 
-def spd(nation : str, df_train_test : dict, Fs : int):
+def psd(nation : str, df_train_test : dict, Fs : int):
     """
     Plot the periodogram of a time series with its prominent peaks and display a dataframe with the most important periods
 
@@ -423,7 +423,7 @@ def res_diagnostics_plot(residuals : np.ndarray, nation : str):
     Returns:
         None
     """
-    residuals = (residuals - np.mean(residuals)) / np.std(residuals)
+    #residuals = (residuals - np.mean(residuals)) / np.std(residuals)
     fig, ax = plt.subplots(2, 2, figsize = (12, 8))
     fig.tight_layout(pad = 5, h_pad = 4)
     fig.suptitle(f'Residual diagnostic plot for {nation}', fontsize = 20)
@@ -553,7 +553,7 @@ def arima_order(nation_list : list, df_train_test : dict):
         arima_model_list.append(arimax_model)
     return order_list, arima_model_list
 
-def res_stats(model_list : list, nation_list : list, df_train_test : dict):
+def res_stats(model_list : list, nation_list : list, df_train_test : dict, lr = False, residuals : np.ndarray = None):
     """
     For every nation in the provided list, displays some statistics about the residuals of the given model.
 
@@ -567,12 +567,20 @@ def res_stats(model_list : list, nation_list : list, df_train_test : dict):
     Returns:
         None
     """
-    for idx, model in enumerate(model_list):
-        stand_resid = np.reshape(model.standardized_forecasts_error, len(df_train_test[nation_list[idx]][0]['GDP']))
-        print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
-        display(acorr_ljungbox(stand_resid, lags = 10))
-        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
-        print('-------------------------------------------------------------------------------\n')
+    if lr:
+        for idx, model in enumerate(model_list):
+            stand_resid = np.reshape(residuals, len(df_train_test[nation_list[idx]][0]['GDP']))
+            print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
+            display(acorr_ljungbox(stand_resid, lags = 10))
+            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+            print('-------------------------------------------------------------------------------\n')
+    else:
+        for idx, model in enumerate(model_list):
+            stand_resid = np.reshape(model.standardized_forecasts_error, len(df_train_test[nation_list[idx]][0]['GDP']))
+            print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
+            display(acorr_ljungbox(stand_resid, lags = 10))
+            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+            print('-------------------------------------------------------------------------------\n')
 
 def arima_prediction_plot(arima_model_list : list, nation_list : list, order_list : list, df_train_test : dict):
     """
