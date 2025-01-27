@@ -18,7 +18,7 @@ from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_a
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.statespace.varmax import VARMAX
-import matplotlib as mpl
+#from statsmodels.tsa.api import VARMAX
 from sklearn.linear_model import LinearRegression
 
 def preprocess_df(df : pd.DataFrame):
@@ -187,7 +187,7 @@ def plotseasonal(res, axes):
     res.resid.plot(ax=axes[3], legend=False)
     axes[3].set_ylabel('Residual')
 
-def roll_mean_std_plot(df, nation_list, roll_num, cmap):
+def roll_mean_std_plot(df : dict, nation_list : list, roll_num : int, cmap : list):
     """
     Plot a time series with its rolling mean and standard deviation
 
@@ -218,7 +218,7 @@ def roll_mean_std_plot(df, nation_list, roll_num, cmap):
 
     plt.show()
 
-def check_stationarity(df_train_test, nation_list):
+def check_stationarity(df_train_test : dict, nation_list : list):
     """
     Checks whether the train sets of the provided time series are stationary, according to the ADFuller test and the KPSS test
 
@@ -259,7 +259,7 @@ def log_transform(df_train_test):
         df_train_test_x[nation] = (np.log(df_train_test[nation][0]), np.log(df_train_test[nation][1]))
     return df_train_test_x
 
-def difference(df_train_test, difference, nation):
+def difference(df_train_test : dict, difference : int, nation : str):
     """
     Performs differencing of a time series
 
@@ -278,7 +278,7 @@ def difference(df_train_test, difference, nation):
     tuple = train_test_split(diff_df)
     return tuple
 
-def detrend(df_train_test_log_dif, nation_list, seasons_list):
+def detrend(df_train_test_log_dif : dict, nation_list : list, seasons_list : list):
     df_train_test_log_dif_detrend = {}
     for idx, nation in enumerate(nation_list):
         stl = STL(df_train_test_log_dif[nation][0]['GDP'], period = seasons_list[idx])
@@ -287,7 +287,7 @@ def detrend(df_train_test_log_dif, nation_list, seasons_list):
         df_train_test_log_dif_detrend[nation] = df_train_test_log_dif[nation][0]['GDP'] - trend
     return df_train_test_log_dif_detrend
 
-def spd(nation, df_train_test, Fs):
+def spd(nation : str, df_train_test : dict, Fs : int):
     """
     Plot the periodogram of a time series with its prominent peaks and display a dataframe with the most important periods
 
@@ -350,7 +350,22 @@ def create_metrics_df():
     metrics_list_of_df = [df_metrics_1, df_metrics_2, df_metrics_3, df_metrics_4, df_metrics_5]
     return metrics_list_of_df
 
-def slr_prediction_plot(nation_list, df_train_test):
+def slr_prediction_plot(nation_list : list, df_train_test : dict):
+    """
+    Fits a simple linear regression for every nation in the provided list, then displays a plot with the train set, test set, fitted values and prediction of the model.
+
+    Parameters:
+        nation_list (list): list containing the strings of the 5 nations
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+    Returns:
+        list: list of the fitted models
+
+        list: list of the predictions done by the models on the test set
+
+        list: list of the AICs of the models
+    """
     slr_model_list = []
     slr_prediction_list = []
     aic_list = []
@@ -396,7 +411,18 @@ def slr_prediction_plot(nation_list, df_train_test):
     plt.show()
     return slr_model_list, slr_prediction_list, aic_list
 
-def res_diagnostics_plot(residuals, nation):
+def res_diagnostics_plot(residuals : np.ndarray, nation : str):
+    """
+    Plots some important statistics for the residuals of a model.
+
+    Parameters:
+        residuals (array): array with the residuals of a model
+
+        nation (str): nation of the model to perform the diagnostics
+
+    Returns:
+        None
+    """
     residuals = (residuals - np.mean(residuals)) / np.std(residuals)
     fig, ax = plt.subplots(2, 2, figsize = (12, 8))
     fig.tight_layout(pad = 5, h_pad = 4)
@@ -421,7 +447,22 @@ def res_diagnostics_plot(residuals, nation):
 
     plt.show()
 
-def mlr_prediction_plot(nation_list, df_train_test):
+def mlr_prediction_plot(nation_list : list, df_train_test : dict):
+    """
+    Fits a multiple linear regression for every nation in the provided list, then displays a plot with the train set, test set, fitted values and prediction of the model.
+
+    Parameters:
+        nation_list (list): list containing the strings of the 5 nations
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+    Returns:
+        list: list of the fitted models
+
+        list: list of the predictions done by the models on the test set
+
+        list: list of the AICs of the models
+    """
     mlr_model_list = []
     mlr_prediction_list = []
     aic_list = []
@@ -467,7 +508,20 @@ def mlr_prediction_plot(nation_list, df_train_test):
     plt.show()
     return mlr_model_list, mlr_prediction_list, aic_list
 
-def arima_order(nation_list, df_train_test):
+def arima_order(nation_list : list, df_train_test : dict):
+    """
+    Finds the best "p", "d" and "q" parameters for an ARIMAX model for every nation in the provided list according to the AIC statistic, and then fits a model with these.
+
+    Parameters:
+        nation_list (list): list containing the strings of the 5 nations
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+    Returns:
+        list: list containing the orders of the various models
+
+        list: list containing the fitted models     
+    """
     order_list = []
     arima_model_list = []
     for idx, nation in enumerate(nation_list):
@@ -499,27 +553,41 @@ def arima_order(nation_list, df_train_test):
         arima_model_list.append(arimax_model)
     return order_list, arima_model_list
 
-'''def arima_diagnostics(arima_model_list, nation_list):
-    for idx, model in enumerate(arima_model_list):
-        print(f"Summary and diagnostics for {nation_list[idx]}'s arima model\n")
-        print(model.summary())
-        mpl.rcdefaults()
-        model.plot_diagnostics(figsize = (10, 7))
-        plt.show()
-        print('--------------------------------------')
-    plt.rcParams['lines.linewidth'] = 2.5
-    plt.rcParams.update({'axes.facecolor' : 'w'}) 
-    plt.rcParams['figure.facecolor'] = 'f7ead4'''
+def res_stats(model_list : list, nation_list : list, df_train_test : dict):
+    """
+    For every nation in the provided list, displays some statistics about the residuals of the given model.
 
-def res_stats(arima_model_list, nation_list, df_train_test):
-    for idx, model in enumerate(arima_model_list):
+    Parameters:
+        model_list: list of the models to calculate the statistics from
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+    Returns:
+        None
+    """
+    for idx, model in enumerate(model_list):
         stand_resid = np.reshape(model.standardized_forecasts_error, len(df_train_test[nation_list[idx]][0]['GDP']))
         print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
         display(acorr_ljungbox(stand_resid, lags = 10))
         print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
         print('-------------------------------------------------------------------------------\n')
 
-def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_test):
+def arima_prediction_plot(arima_model_list : list, nation_list : list, order_list : list, df_train_test : dict):
+    """
+    For every nation plots its train set, test set, fitted values and predictions of an ARIMAX model.
+
+    Parameters:
+        arima_model_list: list of the ARIMAX models
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        order_list (list): list with the orders of the models
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+   
+    """
     arima_prediction_list = []
     fig, ax = plt.subplots(5, 1, figsize = (15, 18))
     plt.suptitle('Arimax predictions', fontsize = 40)
@@ -553,16 +621,37 @@ def arima_prediction_plot(arima_model_list, nation_list, order_list, df_train_te
     plt.show()
     return arima_prediction_list
 
-def add_metrics(model_name : str, model_list, metrics_list, df_train_test, nation_list, prediction_list, ls = False, aic_list = None):
-    if ls:
+def add_metrics(model_name : str, model_list : list, metrics_df : pd.DataFrame, df_train_test : dict, nation_list : list, prediction_list : list, lr = False, aic_list : list = None):
+    """
+    Add the metrics Akaike information criterion, root mean squared error, mean absolute error, mean absolute percentate error to a pre-existing dataframe.
+
+    Parameters:
+        model_name (str): the name of the model to display in the dataframe
+
+        model_list (list): list of the models to calculate the metrics
+
+        metrics_df (dataframe): existing dataframe with metrics of previous models
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        ls (bool, default False): set to True if the provided models are simple or multiple linear regressions
+
+        aic_list (list, default None): a list of the AIC criterions of the models. Need to be provided if the models are simple or multiple linear regressions
+
+    Returns:
+        dataframe: updated pandas dataframe with the added metrics
+    """
+    if lr:
         for idx, model in enumerate(model_list):
             mae = round(mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]) * 100, 2)
             metrics = pd.Series({'Model_name': model_name, 'AIC': round(aic_list[idx]), 
                                 'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])),
                                 'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])), 
                                 'MAPE': mae})
-            metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
-        return metrics_list
+            metrics_df[idx] = pd.concat([metrics_df[idx], metrics.to_frame().T])
+        return metrics_df
     else:
         for idx, model in enumerate(model_list):
             mae = round(mean_absolute_percentage_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx]) * 100, 2)
@@ -570,10 +659,23 @@ def add_metrics(model_name : str, model_list, metrics_list, df_train_test, natio
                                 'RMSE': round(root_mean_squared_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])),
                                 'MAE': round(mean_absolute_error(df_train_test[nation_list[idx]][1]['GDP'], prediction_list[idx])), 
                                 'MAPE': mae})
-            metrics_list[idx] = pd.concat([metrics_list[idx], metrics.to_frame().T])
-        return metrics_list
+            metrics_df[idx] = pd.concat([metrics_df[idx], metrics.to_frame().T])
+        return metrics_df
 
-def ets_order(df_train_test, nation_list):
+def ets_order(df_train_test : dict, nation_list : list):
+    """
+    Performs a grid search to the train time series of the dataframe to find the optimal "error", "trend", "seasonal", "seasonal_periods", "damped_tred" parameters of an ETS model.
+
+    Parameters:
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        nation_list (list): list containing the strings of the 5 nations
+    
+    Returns:
+        list: list of fitted ETS models for the nations
+
+        dataframe: pandas dataframe with the parameters of the ETS models
+    """
     df_params = []
     model_list = []
     for nation in nation_list:
@@ -616,7 +718,20 @@ def ets_order(df_train_test, nation_list):
 
     return model_list, df_params
 
-def ets_prediction_plot(ets_model_list, nation_list, df_train_test):
+def ets_prediction_plot(ets_model_list : list, nation_list : list, df_train_test : dict):
+    """
+    For every nation plots its train set, test set, fitted values and predictions of an ETS model.
+
+    Parameters:
+        ets_model_list (list): list of the ETS models
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+    Returns:
+        list: list of the predictions made by the fitted ETS models
+    """
     ets_prediction_list = []
     fig, ax = plt.subplots(5, 1, figsize = (15, 18))
     plt.suptitle('Ets predictions', fontsize = 40)
@@ -647,6 +762,9 @@ def ets_prediction_plot(ets_model_list, nation_list, df_train_test):
     return ets_prediction_list
 
 def grangers_causation(data, name_variables, test, maxlags):
+    """
+    
+    """
     df = pd.DataFrame(np.zeros((len(name_variables), len(name_variables))), columns = name_variables, index = name_variables)
     for c in df.columns:
         for r in df.columns:
@@ -655,7 +773,10 @@ def grangers_causation(data, name_variables, test, maxlags):
             df.loc[c,r] = p_values
     return df
 
-def grangers_causation_columns(df_train_test_log_dif, nation_list):
+def grangers_causation_columns(df_train_test_log_dif : dict, nation_list : list):
+    """
+    
+    """
     grangers_columns = []
     for nation in nation_list:
         print(nation)
@@ -670,15 +791,15 @@ def grangers_causation_columns(df_train_test_log_dif, nation_list):
 
     return grangers_columns
 
-from statsmodels.tsa.api import VARMAX
-
-def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns):
+def varma1_order(df_train_test_log_dif : dict, nation_list : list, grangers_causation_columns: list):
     """
     Finds the best VARMAX order (p, q) for each nation using AIC.
     
     Parameters:
         df_train_test_log_dif (dict): Dictionary of time series data for each nation.
+
         nation_list (list): List of nation names.
+
         grangers_causation_columns (list): List of lists containing the selected columns for each nation.
     
     Returns:
@@ -728,34 +849,65 @@ def varma1_order(df_train_test_log_dif, nation_list, grangers_causation_columns)
     
     return results, varmax_model_list
 
-def var_res_stats(arima_model_list, nation_list, df_train_test):
-    for idx, model in enumerate(arima_model_list):
+def var_res_stats(model_list : list, nation_list : list, df_train_test : dict):
+    """
+    For every nation in the provided list, displays some statistics about the residuals of the given model. 
+
+    Parameters:
+        model_list: list of the models to calculate the statistics from
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+    Returns:
+        None
+    """
+    for idx, model in enumerate(model_list):
         stand_resid = np.reshape(model.standardized_forecasts_error[-1], len(df_train_test[nation_list[idx]][0]['GDP']))
         print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
         display(acorr_ljungbox(stand_resid, lags = 10))
         print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
         print('-------------------------------------------------------------------------------')
 
-def invert_first_order_differencing(differenced_series, original_series):
+def invert_first_order_differencing(differenced_series : pd.Series, original_series : pd.Series):
     """
     Inverts a first-order differencing to reconstruct the original series.
     
     Parameters:
         differenced_series (pd.Series): The differenced series (e.g., output of `series.diff()`).
+
         original_series (pd.Series): The original series (must include the first value of the original series).
     
     Returns:
         pd.Series: The reconstructed original series.
     """
-    # Ensure inputs are pandas Series
     if not isinstance(differenced_series, pd.Series) or not isinstance(original_series, pd.Series):
         raise ValueError("Both inputs must be pandas Series.")
     
-    # Reconstruct the original series
     inverted_series = differenced_series.cumsum() + original_series.iloc[0]
     return inverted_series
 
-def varma1_prediction_plot(varma_model_list, nation_list, order_list, df_train_test, df_train_test_log_dif, grangers_col_list):
+def varma1_prediction_plot(varma_model_list : list, nation_list : list, order_list : list, df_train_test : dict, df_train_test_log_dif : dict, grangers_col_list : list):
+    """
+    For every nation plots its train set, test set, fitted values and predictions of a VARMAX model.
+
+    Parameters:
+        varma_model_list (list): list of the VARMAX models
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        order_list (list): list of the orders of the parameters of the various VARMAX models
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        df_train_test_log_dif (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test). The time series of these dataframe need to be stationary and of first order differencing of the df_train_test dataframe
+
+        grangers_col_list (list): list of the columns to use as endog variables (GDP excluded)
+
+    Returns:
+        list: list of the predictions made by the fitted VARMAX models
+    """
     varma_prediction_list = []
     fig, ax = plt.subplots(5, 1, figsize = (15, 18))
     plt.suptitle('Varma predictions', fontsize = 40)
@@ -795,13 +947,15 @@ def varma1_prediction_plot(varma_model_list, nation_list, order_list, df_train_t
     plt.show()
     return varma_prediction_list
 
-def varma2_order(df_train_test_log_dif, nation_list):
+def varma2_order(df_train_test_log_dif : dict, nation_list : list):
     """
     Finds the best VARMAX order (p, q) for each nation using AIC.
     
     Parameters:
         df_train_test_log_dif (dict): Dictionary of time series data for each nation.
+
         nation_list (list): List of nation names.
+
         grangers_causation_columns (list): List of lists containing the selected columns for each nation.
     
     Returns:
@@ -845,7 +999,24 @@ def varma2_order(df_train_test_log_dif, nation_list):
     
     return results, varmax_model_list
 
-def varma2_prediction_plot(varma_model_list, nation_list, order_list, df_train_test, df_train_test_log_dif):
+def varma2_prediction_plot(varma_model_list: list, nation_list : list, order_list : list, df_train_test : dict, df_train_test_log_dif : dict):
+    """
+    For every nation plots its train set, test set, fitted values and predictions of a VARMA model.
+
+    Parameters:
+        varma_model_list (list): list of the VARMA models
+
+        nation_list (list): list containing the strings of the 5 nations
+
+        order_list (list): list of the orders of the parameters of the various VARMA models
+
+        df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
+
+        df_train_test_log_dif (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test). The time series of these dataframe need to be stationary and of first order differencing of the df_train_test dataframe
+
+    Returns:
+        list: list of the predictions made by the fitted VARMA models
+    """
     varma_prediction_list = []
     fig, ax = plt.subplots(5, 1, figsize = (15, 18))
     plt.suptitle('Varma predictions', fontsize = 40)
@@ -885,19 +1056,30 @@ def varma2_prediction_plot(varma_model_list, nation_list, order_list, df_train_t
     plt.show()
     return varma_prediction_list
 
-def best_model(metrics_df, nation_list):
-  for idx, df in enumerate(metrics_df):
-    mask = df['AIC'] == df['AIC'].min()
-    best_aic = df[mask]['Model_name'][0]
-    mask = df['MAE'] == df['MAE'].min()
-    best_mae = df[mask]['Model_name'][0]
-    mask = df['RMSE'] == df['RMSE'].min()
-    best_rmse = df[mask]['Model_name'][0]
-    mask = df['MAPE'] == df['MAPE'].min()
-    best_mape = df[mask]['Model_name'][0]
-    best_dic = {'Best AIC' : best_aic,
-                'Best MAE' : best_mae,
-                'Best RMSE' : best_rmse,
-                'Best MAPE' : best_mape}
-    best_df = pd.DataFrame(best_dic, index = [nation_list[idx]])
-    display(best_df)
+def best_model(metrics_df : pd.DataFrame, nation_list : list):
+    """
+    Based on a dataframe with metrics of various models, returns the best model for every criterion. The metrics need to be "AIC", "RMSE", "MAE", "MAPE".
+
+    Parameters:
+        metrics_df (pd.DataFrame): data about the metrics of the models
+
+        nation_list (list): list of strings of the nations the model where fitted with
+
+    Returns:
+        None
+    """
+    for idx, df in enumerate(metrics_df):
+        mask = df['AIC'] == df['AIC'].min()
+        best_aic = df[mask]['Model_name'][0]
+        mask = df['MAE'] == df['MAE'].min()
+        best_mae = df[mask]['Model_name'][0]
+        mask = df['RMSE'] == df['RMSE'].min()
+        best_rmse = df[mask]['Model_name'][0]
+        mask = df['MAPE'] == df['MAPE'].min()
+        best_mape = df[mask]['Model_name'][0]
+        best_dic = {'Best AIC' : best_aic,
+                    'Best MAE' : best_mae,
+                    'Best RMSE' : best_rmse,
+                    'Best MAPE' : best_mape}
+        best_df = pd.DataFrame(best_dic, index = [nation_list[idx]])
+        display(best_df)
