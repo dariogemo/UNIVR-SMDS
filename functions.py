@@ -10,7 +10,6 @@ from statsmodels.tsa.seasonal import STL
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.stats.stattools import durbin_watson
 from scipy.stats import jarque_bera
-from sklearn.preprocessing import StandardScaler
 from pmdarima import auto_arima
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.exponential_smoothing.ets import ETSModel
@@ -18,7 +17,6 @@ from sklearn.metrics import root_mean_squared_error, mean_absolute_error, mean_a
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.statespace.varmax import VARMAX
-#from statsmodels.tsa.api import VARMAX
 from sklearn.linear_model import LinearRegression
 
 def preprocess_df(df : pd.DataFrame):
@@ -531,7 +529,7 @@ def arima_order(nation_list : list, df_train_test : dict):
         df_train_test[nation][0]['GDP'], 
         X = df_train_test[nation][0].drop('GDP', axis = 1),
         start_p = 0, d = 1, start_q = 0, 
-        max_p = 8, max_q = 8,
+        max_p = 4, max_q = 4,
         seasonal = False,
         error_action = 'warn', 
         with_intercept = True, 
@@ -567,7 +565,7 @@ def res_stats(model_list : list, nation_list : list, df_train_test : dict, lr = 
     Returns:
         None
     """
-    if lr:
+    if lr == True:
         for idx, model in enumerate(model_list):
             stand_resid = np.reshape(residuals, len(df_train_test[nation_list[idx]][0]['GDP']))
             print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
