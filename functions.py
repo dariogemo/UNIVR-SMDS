@@ -811,6 +811,14 @@ def grangers_causation_columns(df_train_test_log_dif : dict, nation_list : list)
     """
     For each nation in the nation_list, perform Granger causality tests and return columns that
     Granger cause each other while ensuring GDP is part of the relationship.
+
+    Parameters:
+        df_train_test_log_dif (dict): Dictionary of time series data for each nation.
+
+        nation_list (list): List of nation names.
+
+    Returns:
+        list: list of columns that granger cause each other
     """
     grangers_columns = []
     for nation in nation_list:
