@@ -590,14 +590,14 @@ def res_stats(model_list : list, nation_list : list, df_train_test : dict, lr = 
             stand_resid = np.reshape(residuals, len(df_train_test[nation_list[idx]][0]['GDP']))
             print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
             display(acorr_ljungbox(stand_resid, lags = 10))
-            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (too few samples) {jarque_bera(stand_resid).pvalue}")
             print('-------------------------------------------------------------------------------\n')
     else:
         for idx, model in enumerate(model_list):
             stand_resid = np.reshape(model.standardized_forecasts_error, len(df_train_test[nation_list[idx]][0]['GDP']))
             print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
             display(acorr_ljungbox(stand_resid, lags = 10))
-            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (too few samples) {jarque_bera(stand_resid).pvalue}")
             print('-------------------------------------------------------------------------------\n')
 
 def arima_prediction_plot(arima_model_list : list, nation_list : list, order_list : list, df_train_test : dict):
@@ -939,7 +939,7 @@ def var_res_stats(model_list : list, nation_list : list, df_train_test : dict):
         stand_resid = np.reshape(model.standardized_forecasts_error[-1], len(df_train_test[nation_list[idx]][0]['GDP']))
         print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
         display(acorr_ljungbox(stand_resid, lags = 10))
-        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
+        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (too few samples) {jarque_bera(stand_resid).pvalue}")
         print('-------------------------------------------------------------------------------')
 
 def invert_first_order_differencing(differenced_series : pd.Series, original_series : pd.Series):
