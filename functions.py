@@ -52,7 +52,7 @@ def nation_input(number : int, valid_nations : list, df : pd.DataFrame):
     Ask the user for a nation
     """   
     adj_list = ['first', 'second', 'third', 'fourth', 'fifth']
-    nat_list = ['Finland', 'Sweden', 'Portugal', 'Algeria', 'Germany']
+    nat_list = ['Finland', 'Sweden', 'Portugal', 'Poland', 'Germany']
     while True:
         nation = input(f'Please input {adj_list[number]} nation. Press Enter to use the default nation ({nat_list[number]})')
         nation = nation.strip().title()
@@ -64,7 +64,7 @@ def nation_input(number : int, valid_nations : list, df : pd.DataFrame):
         elif not nation and number == 2:
             nation = 'Portugal'
         elif not nation and number == 3:
-            nation = 'Algeria'
+            nation = 'Poland'
         elif not nation and number == 4:
             nation = 'Germany'
         
@@ -97,8 +97,8 @@ def create_nation_list(valid_nations : list, df : pd.DataFrame):
 def create_df(df : pd.DataFrame):
     """
     Transforms the input dataframe in a dataframe with time as index and 4 macroeconomic indicators as 
-    columns. The indicators are: 'Exports of goods and services', 'Imports of goods and services', 
-    'Gross Domestic Product (GDP)', 'Manufacturing (ISIC D)', 'Gross capital formation'
+    columns. The indicators are: 'Construction (ISIC F)', 'Final consumption expenditure', 'Gross 
+    Domestic Product (GDP)', 'General government final consumption expenditure', 'Gross capital formation'
 
     Parameters:
         df (pandas DataFrame): dataframe to be transformed. It must be of only one nation
@@ -111,9 +111,9 @@ def create_df(df : pd.DataFrame):
     df.columns = df.loc[0]
     df = df.drop(0)
     df.index = pd.date_range(start="1970-01-01", end="2020-12-31", freq="YS")
-    df = df[['Exports of goods and services', 'Imports of goods and services', 'Gross Domestic Product (GDP)', 'Manufacturing (ISIC D)', 'Gross capital formation']]
+    df = df[['Construction (ISIC F)', 'Final consumption expenditure', 'Gross Domestic Product (GDP)', 'General government final consumption expenditure', 'Gross capital formation']]
     df = df.iloc[:, [0, 1, 3, 4, 2]]
-    df.columns = ['Exports', 'Imports', 'Manufacturing', 'Gross_capital', 'GDP']
+    df.columns = ['Construction', 'Consumption', 'Gov_exp', 'Gross_capital', 'GDP']
     return df
 
 def highest_corr_variable(corr_list : list, nation_list : list):
@@ -222,7 +222,7 @@ def roll_mean_std_plot(df : dict, nation_list : list, roll_num : int, cmap : lis
 
     plt.show()
 
-def check_stationarity(df_train_test : dict, nation_list : list):
+def check_stationarity(df_train_test : dict, nation_list : list, variable : str):
     """
     Checks whether the train sets of the provided time series are stationary, according to the ADFuller 
     test and the KPSS test
@@ -238,7 +238,7 @@ def check_stationarity(df_train_test : dict, nation_list : list):
     """
     list_for_df = []
     for idx, nation in enumerate(nation_list):
-        adf_test = adfuller(df_train_test[nation][0]['GDP'], autolag='AIC')
+        adf_test = adfuller(df_train_test[nation][0][variable], autolag='AIC')
         lista_prova = []
         lista_prova.append(adf_test[0])
         lista_prova.append(adf_test[1])
@@ -246,7 +246,7 @@ def check_stationarity(df_train_test : dict, nation_list : list):
             lista_prova.append('Yes')
         else:
             lista_prova.append('No')
-        kpss_out = kpss(df_train_test[nation][0]['GDP'], regression='c', nlags='auto', store=True)
+        kpss_out = kpss(df_train_test[nation][0][variable], regression='c', nlags='auto', store=True)
         lista_prova.append(kpss_out[0])
         lista_prova.append(kpss_out[1])
         if kpss_out[1] >= 0.05:
@@ -590,14 +590,14 @@ def res_stats(model_list : list, nation_list : list, df_train_test : dict, lr = 
             stand_resid = np.reshape(residuals, len(df_train_test[nation_list[idx]][0]['GDP']))
             print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
             display(acorr_ljungbox(stand_resid, lags = 10))
-            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (too few samples) {jarque_bera(stand_resid).pvalue}")
+            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
             print('-------------------------------------------------------------------------------\n')
     else:
         for idx, model in enumerate(model_list):
             stand_resid = np.reshape(model.standardized_forecasts_error, len(df_train_test[nation_list[idx]][0]['GDP']))
             print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
             display(acorr_ljungbox(stand_resid, lags = 10))
-            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (too few samples) {jarque_bera(stand_resid).pvalue}")
+            print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
             print('-------------------------------------------------------------------------------\n')
 
 def arima_prediction_plot(arima_model_list : list, nation_list : list, order_list : list, df_train_test : dict):
@@ -877,43 +877,41 @@ def varma1_order(df_train_test_log_dif : dict, nation_list : list, grangers_caus
 
         if len(grangers_causation_columns) == len(df_train_test_log_dif[nation][0].columns):
             for p in range(1, 4):
-                for q in range(1, 4):
                     try:
                         model = VARMAX(
                             df_train_test_log_dif[nation][0][grangers_causation_columns[idx]],
                             #exog = df_train_test_log_dif[nation][0].drop(grangers_causation_columns[idx], axis = 1),
-                            order=(p, q)
+                            order=(p, 0)
                         ).fit(disp=False)
                         aic = model.aic
                         if aic < best_aic:
                             best_aic = aic
-                            best_p, best_q = p, q
+                            best_p = p
                             best_model = model
                     except Exception as e:
-                        print(f"Error fitting VARMAX for {nation}, (p, q)=({p}, {q}): {e}")
+                        print(f"Error fitting VARMAX for {nation}, (p)=({p}): {e}")
                         continue
         if len(grangers_causation_columns) != len(df_train_test_log_dif[nation][0].columns):      
-            for p in range(1, 4):
-                for q in range(1, 4):
+            for p in range(1, 5):
                     try:
                         model = VARMAX(
                             df_train_test_log_dif[nation][0][grangers_causation_columns[idx]],
                             exog = df_train_test_log_dif[nation][0].drop(grangers_causation_columns[idx], axis = 1),
-                            order=(p, q)
+                            order=(p, 0)
                         ).fit(disp=False)
                         aic = model.aic
                         if aic < best_aic:
                             best_aic = aic
-                            best_p, best_q = p, q
+                            best_p = p
                             best_model = model
                     except Exception as e:
-                        print(f"Error fitting VARMAX for {nation}, (p, q)=({p}, {q}): {e}")
+                        print(f"Error fitting VARMAX for {nation}, (p)=({p}): {e}")
                         continue
         
         if best_model is not None:
             varmax_model_list.append(best_model)
-            results.append([best_p, best_q])
-            print(f"Best order for {nation}: (p, q)=({best_p}, {best_q}), AIC={best_aic}")
+            results.append([best_p])
+            print(f"Best order for {nation}: (p)=({best_p}), AIC={best_aic}")
         else:
             print(f"No valid model found for {nation}.")
             varmax_model_list.append(None)
@@ -939,7 +937,7 @@ def var_res_stats(model_list : list, nation_list : list, df_train_test : dict):
         stand_resid = np.reshape(model.standardized_forecasts_error[-1], len(df_train_test[nation_list[idx]][0]['GDP']))
         print(f"DW statistic for standardized residuals of {nation_list[idx]}'s model: {durbin_watson(stand_resid)}")
         display(acorr_ljungbox(stand_resid, lags = 10))
-        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (too few samples) {jarque_bera(stand_resid).pvalue}")
+        print(f"JB p-value for standardized residuals of {nation_list[idx]}'s model: (useless, too few samples) {jarque_bera(stand_resid).pvalue}")
         print('-------------------------------------------------------------------------------')
 
 def invert_first_order_differencing(differenced_series : pd.Series, original_series : pd.Series):
@@ -1019,7 +1017,7 @@ def varma1_prediction_plot(varma_model_list : list, nation_list : list, order_li
     plt.show()
     return varma_prediction_list
 
-def varma2_order(df_train_test_log_dif : dict, nation_list : list):
+def varma2_order(df_train_test_log_dif : dict, nation_list : list, grangers_col_list : list):
     """
     Finds the best VARMAX order (p, q) for each nation using AIC.
     
@@ -1043,27 +1041,29 @@ def varma2_order(df_train_test_log_dif : dict, nation_list : list):
         best_model = None
         
         # Iterate over p and q
-        for p in range(1, 3):
-            for q in range(1, 3):
+        grangers_col_list[idx].remove('GDP')
+        for variable in grangers_col_list[idx]:
+            for p in range(1, 5):
                 try:
                     model = VARMAX(
-                        df_train_test_log_dif[nation][0],
-                        order=(p, q)
+                        df_train_test_log_dif[nation][0][['GDP', variable]],
+                        order = (p, 0)
                     ).fit(disp=False)
                     aic = model.aic
                     if aic < best_aic:
                         best_aic = aic
-                        best_p, best_q = p, q
+                        best_p = p
                         best_model = model
+                        best_variable = variable
                 except Exception as e:
-                    print(f"Error fitting VARMAX for {nation}, (p, q)=({p}, {q}): {e}")
+                    print(f"Error fitting VARMAX for {nation}, (p)=({p}) and variable {variable}: {e}")
                     continue
         
         # Append best model and order
         if best_model is not None:
             varmax_model_list.append(best_model)
             results.append([best_p, best_q])
-            print(f"Best order for {nation}: (p, q) = ({best_p}, {best_q}), AIC = {best_aic}")
+            print(f"Best order for {nation}: (p) = ({best_p}), AIC = {best_aic} variable ({variable})")
         else:
             print(f"No valid model found for {nation}.")
             varmax_model_list.append(None)
@@ -1141,14 +1141,16 @@ def best_model(metrics_df : pd.DataFrame, nation_list : list):
         None
     """
     for idx, df in enumerate(metrics_df):
+        df.reset_index(drop = True, inplace = True)
+        df = df.drop(df[df['Model_name'] == 'ETS'].index, axis = 0)
         mask = df['AIC'] == df['AIC'].min()
-        best_aic = df[mask]['Model_name'][0]
+        best_aic = df[mask]['Model_name'].iloc[0]
         mask = df['MAE'] == df['MAE'].min()
-        best_mae = df[mask]['Model_name'][0]
+        best_mae = df[mask]['Model_name'].iloc[0]
         mask = df['RMSE'] == df['RMSE'].min()
-        best_rmse = df[mask]['Model_name'][0]
+        best_rmse = df[mask]['Model_name'].iloc[0]
         mask = df['MAPE'] == df['MAPE'].min()
-        best_mape = df[mask]['Model_name'][0]
+        best_mape = df[mask]['Model_name'].iloc[0]
         best_dic = {'Best AIC' : best_aic,
                     'Best MAE' : best_mae,
                     'Best RMSE' : best_rmse,
