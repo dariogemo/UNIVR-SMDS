@@ -96,9 +96,9 @@ def create_nation_list(valid_nations : list, df : pd.DataFrame):
 
 def create_df(df : pd.DataFrame):
     """
-    Transforms the input dataframe in a dataframe with time as index and 4 macroeconomic indicators as 
-    columns. The indicators are: 'Construction (ISIC F)', 'Final consumption expenditure', 'Gross 
-    Domestic Product (GDP)', 'General government final consumption expenditure', 'Gross capital formation'
+    Transforms the input dataframe in a dataframe with time as index and 5 macroeconomic indicators as 
+    columns. The indicators are: 'Construction (ISIC F)', 'Final consumption expenditure', 'Gross Domestic 
+    Product (GDP)', 'General government final consumption expenditure', 'Gross capital formation'
 
     Parameters:
         df (pandas DataFrame): dataframe to be transformed. It must be of only one nation
@@ -149,6 +149,7 @@ def lowest_corr_variable(corr_df : pd.DataFrame):
         list: list containing tuples of the nations' lowest correlation variables with each other
     """
     cgdpd = corr_df.drop('GDP', axis = 1).replace({1 : np.nan})
+    cgdpd = cgdpd.apply(lambda x : abs(x))
     idx = cgdpd.stack().idxmin()
     return idx
 
@@ -845,10 +846,10 @@ def grangers_causation_columns(df_train_test_log_dif : dict, nation_list : list)
 
 def varma1_order(df_train_test_log_dif : dict, nation_list : list, grangers_causation_columns: list):
     """
-    Finds the best VARMAX order (p, q) for each nation using AIC. Only use a selected number of columns 
+    Finds the best VARX(p) for each nation using AIC. Only use a selected number of columns 
     as endogenous variables, and the remaining as exogenous. If the number of endogenous variables is 
     the same as the total number of variables in the dataframe, only use endogenous variable and no 
-    hexogenous, effectively fitting a VARMA model.
+    hexogenous, effectively fitting a VAR model.
     
     Parameters:
         df_train_test_log_dif (dict): Dictionary of time series data for each nation.
@@ -858,7 +859,7 @@ def varma1_order(df_train_test_log_dif : dict, nation_list : list, grangers_caus
         grangers_causation_columns (list): List of lists containing the selected columns for each nation.
     
     Returns:
-        tuple: A list of (p, q) orders and a list of fitted VARMAX models for each nation.
+        tuple: A list of (p) parameters and a list of fitted VARX models for each nation.
     """
     varmax_model_list = []
     results = []
@@ -876,7 +877,7 @@ def varma1_order(df_train_test_log_dif : dict, nation_list : list, grangers_caus
             continue
 
         if len(grangers_causation_columns) == len(df_train_test_log_dif[nation][0].columns):
-            for p in range(1, 4):
+            for p in range(1, 6):
                     try:
                         model = VARMAX(
                             df_train_test_log_dif[nation][0][grangers_causation_columns[idx]],
@@ -892,7 +893,7 @@ def varma1_order(df_train_test_log_dif : dict, nation_list : list, grangers_caus
                         print(f"Error fitting VARMAX for {nation}, (p)=({p}): {e}")
                         continue
         if len(grangers_causation_columns) != len(df_train_test_log_dif[nation][0].columns):      
-            for p in range(1, 5):
+            for p in range(1, 6):
                     try:
                         model = VARMAX(
                             df_train_test_log_dif[nation][0][grangers_causation_columns[idx]],
@@ -960,14 +961,14 @@ def invert_first_order_differencing(differenced_series : pd.Series, original_ser
 
 def varma1_prediction_plot(varma_model_list : list, nation_list : list, order_list : list, df_train_test : dict, df_train_test_log_dif : dict, grangers_col_list : list):
     """
-    For every nation plots its train set, test set, fitted values and predictions of a VARMAX model.
+    For every nation plots its train set, test set, fitted values and predictions of a VARX model.
 
     Parameters:
-        varma_model_list (list): list of the VARMAX models
+        varma_model_list (list): list of the VARX models
 
         nation_list (list): list containing the strings of the 5 nations
 
-        order_list (list): list of the orders of the parameters of the various VARMAX models
+        order_list (list): list of the orders of the parameters of the various VARX models
 
         df_train_test (dictionary): dictionary with a nation as key, and as value a list of 2 pandas dataframes (train and test)
 
@@ -976,7 +977,7 @@ def varma1_prediction_plot(varma_model_list : list, nation_list : list, order_li
         grangers_col_list (list): list of the columns to use as endog variables (GDP excluded)
 
     Returns:
-        list: list of the predictions made by the fitted VARMAX models
+        list: list of the predictions made by the fitted VARX models
     """
     varma_prediction_list = []
     fig, ax = plt.subplots(5, 1, figsize = (15, 18))
@@ -1019,7 +1020,7 @@ def varma1_prediction_plot(varma_model_list : list, nation_list : list, order_li
 
 def varma2_order(df_train_test_log_dif : dict, nation_list : list, grangers_col_list : list):
     """
-    Finds the best VARMAX order (p, q) for each nation using AIC.
+    Finds the best VAR parameter (p) for each nation using AIC.
     
     Parameters:
         df_train_test_log_dif (dict): Dictionary of time series data for each nation.
@@ -1029,7 +1030,7 @@ def varma2_order(df_train_test_log_dif : dict, nation_list : list, grangers_col_
         grangers_causation_columns (list): List of lists containing the selected columns for each nation.
     
     Returns:
-        tuple: A list of (p, q) orders and a list of fitted VARMAX models for each nation.
+        tuple: A list of (p) parameters and a list of fitted VARMAX models for each nation.
     """
     varmax_model_list = []
     results = []
@@ -1040,10 +1041,9 @@ def varma2_order(df_train_test_log_dif : dict, nation_list : list, grangers_col_
         best_p, best_q = None, None
         best_model = None
         
-        # Iterate over p and q
         grangers_col_list[idx].remove('GDP')
         for variable in grangers_col_list[idx]:
-            for p in range(1, 5):
+            for p in range(1, 6):
                 try:
                     model = VARMAX(
                         df_train_test_log_dif[nation][0][['GDP', variable]],
@@ -1059,7 +1059,6 @@ def varma2_order(df_train_test_log_dif : dict, nation_list : list, grangers_col_
                     print(f"Error fitting VARMAX for {nation}, (p)=({p}) and variable {variable}: {e}")
                     continue
         
-        # Append best model and order
         if best_model is not None:
             varmax_model_list.append(best_model)
             results.append([best_p, best_q])
