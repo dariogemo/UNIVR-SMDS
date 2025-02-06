@@ -130,6 +130,7 @@ def highest_corr_variable(corr_list : list, nation_list : list):
     """
     max_list = []
     for corr in corr_list:
+        corr = corr.apply(lambda x : abs(x))
         max_corr = corr['GDP'].drop('GDP').max()
         idx = corr.index[corr['GDP'] == max_corr].tolist()[0]
         max_list.append(idx)
